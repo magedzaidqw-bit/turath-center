@@ -1,0 +1,27 @@
+{
+  "name": "مركز التراث لتحفيظ القرآن الكريم",
+  "short_name": "التراث - الجهراء",
+  "description": "نظام إدارة مركز التراث لتحفيظ القرآن الكريم - فرع الجهراء",
+  "start_url": "/turath-center/",
+  "scope": "/turath-center/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d2818",
+  "theme_color": "#0d2818",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "turath-center-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "turath-center-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
