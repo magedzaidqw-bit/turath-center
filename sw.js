@@ -1,4 +1,4 @@
-const CACHE_NAME = 'turath-center-v1';
+const CACHE_NAME = 'turath-center-v3';
 const urlsToCache = [
   '/turath-center/',
   '/turath-center/index.html',
