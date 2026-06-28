@@ -635,11 +635,15 @@ sb.auth.getSession().then(({ data: { session } }) => {
   if (session) { CU = session.user; loadProfile(); }
 });
 
-// إلغاء Service Worker نهائياً لمنع مشاكل الكاش
+// إلغاء تسجيل أي Service Worker قديم وتسجيل الجديد
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => {
     regs.forEach(r => r.unregister());
-    console.log('SW unregistered:', regs.length);
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/turath-center/sw.js')
+      .then(() => console.log('SW registered'))
+      .catch(err => console.log('SW error:', err));
   });
 }
 </script>
@@ -2012,63 +2016,35 @@ async function printMemoHistory() {
   const cn = sel && sel.value ? sel.options[sel.selectedIndex].text : 'جميع الحلقات';
   const circleId = sel?.value || null;
 
-  // جلب IDs الطلاب المستهدفين
-  let sids = [];
+  let studQ = sb.from('students').select('id,full_name,circle_id').order('full_name');
   if (circleId) {
-    const { data: cs } = await sb.from('students').select('id').eq('circle_id', circleId);
-    sids = cs?.map(s=>s.id) || [];
+    studQ = studQ.eq('circle_id', circleId);
   } else if (CP.role === 'teacher') {
     const { data: mc } = await sb.from('circles').select('id').eq('teacher_id', CU.id);
-    const cids = mc?.map(c=>c.id) || [];
-    if (cids.length) {
-      const { data: cs } = await sb.from('students').select('id').in('circle_id', cids);
-      sids = cs?.map(s=>s.id) || [];
-    }
+    const cids = mc?.map(c=>c.id)||[];
+    if (cids.length) studQ = studQ.in('circle_id', cids);
   }
+  const { data: students } = await studQ;
+  if (!students?.length) { alert('لا يوجد طلاب'); return; }
 
-  // جلب الحفظ والمراجعة مع اسم الطالب مباشرة
-  let hQ = sb.from('memorization_log')
-    .select('student_id,surah_from,ayah_from,surah_to,ayah_to,verses_count,mastery,date,students(id,full_name)')
-    .order('date',{ascending:false}).limit(1000);
-  let mQ = sb.from('review_log')
-    .select('student_id,surah_from,ayah_from,surah_to,ayah_to,verses_count,mastery,date,students(id,full_name)')
-    .order('date',{ascending:false}).limit(1000);
+  const results = await Promise.all(students.map(async s => {
+    const [hRes, mRes] = await Promise.all([
+      sb.from('memorization_log').select('surah_from,ayah_from,surah_to,ayah_to,verses_count,mastery,date').eq('student_id', s.id).order('date',{ascending:false}).limit(1).maybeSingle(),
+      sb.from('review_log').select('*').eq('student_id', s.id).order('date',{ascending:false}).limit(1).maybeSingle()
+    ]);
+    return { name: s.full_name, hifz: hRes.data, mur: mRes.data };
+  }));
 
-  if (sids.length) { hQ = hQ.in('student_id', sids); mQ = mQ.in('student_id', sids); }
-
-  const [{ data: hData }, { data: mData }] = await Promise.all([hQ, mQ]);
-
-  // بناء map بالاسم من البيانات نفسها
-  const studentsMap = {};
-  (hData||[]).forEach(h => {
-    if (!studentsMap[h.student_id]) studentsMap[h.student_id] = { name: h.students?.full_name||'—', hifz: null, mur: null };
-    if (!studentsMap[h.student_id].hifz) studentsMap[h.student_id].hifz = {
-      surah_from: h.surah_from, ayah_from: h.ayah_from,
-      surah_to: h.surah_to, ayah_to: h.ayah_to,
-      verses_count: h.verses_count, mastery: h.mastery, date: h.date
-    };
-  });
-  (mData||[]).forEach(m => {
-    if (!studentsMap[m.student_id]) studentsMap[m.student_id] = { name: m.students?.full_name||'—', hifz: null, mur: null };
-    if (!studentsMap[m.student_id].mur) studentsMap[m.student_id].mur = {
-      surah_from: m.surah_from, ayah_from: m.ayah_from,
-      surah_to: m.surah_to, ayah_to: m.ayah_to,
-      mastery: m.mastery, date: m.date
-    };
-  });
-
-  const activeList = Object.values(studentsMap).sort((a,b) => a.name.localeCompare(b.name,'ar'));
+  const activeList = results.filter(s => s.hifz || s.mur);
   if (!activeList.length) { alert('لا توجد سجلات حفظ أو مراجعة'); return; }
-  
 
   const mAr={excellent:'ممتاز',good:'جيد',needs_review:'يراجع',weak:'ضعيف'};
   const mBg={excellent:'#d4f0dc',good:'#d0e8fb',needs_review:'#fff3cd',weak:'#fde0e0'};
   const mCl={excellent:'#1a6b38',good:'#14568f',needs_review:'#856404',weak:'#a3262b'};
 
   const grade = (mastery) => {
-    if (!mastery || !mAr[mastery]) return '—';
-    const cl={excellent:'#1a6b38',good:'#14568f',needs_review:'#856404',weak:'#a3262b'};
-    return `<b style="color:${cl[mastery]};font-size:11px;border:1.5px solid ${cl[mastery]};padding:1px 5px;border-radius:3px">${mAr[mastery]}</b>`;
+    if (!mastery || !mAr[mastery]) return '<span style="color:#bbb;font-size:10px">—</span>';
+    return `<span style="background:${mBg[mastery]};color:${mCl[mastery]};padding:2px 6px;border-radius:12px;font-size:10px;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact">${mAr[mastery]}</span>`;
   };
 
   const rows = activeList.map((s,i) => {
@@ -2076,7 +2052,7 @@ async function printMemoHistory() {
     const hText = h ? `${h.surah_from} (${h.ayah_from||1}) — ${h.surah_to} (${h.ayah_to||1})` : '—';
     const hSub  = h ? `${h.verses_count||0} آية | ${h.date}` : '';
     const mText = m ? `${m.surah_from} (${m.ayah_from||1}) — ${m.surah_to} (${m.ayah_to||1})` : '—';
-    const mSub  = m ? `${m.verses_count||0} آية | ${m.date}` : '';
+    const mSub  = m ? m.date : '';
     const bg = i%2===0 ? '#ffffff' : '#f5f2ea';
     return `<tr style="background:${bg} !important;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       <td style="padding:6px 4px;text-align:center;font-size:10px;color:#aaa;border:1px solid #ddd;background:${bg} !important">${i+1}</td>
@@ -2094,10 +2070,8 @@ async function printMemoHistory() {
     </tr>`;
   }).join('');
 
-  const printTitle = 'كشف الحفظ والمراجعة — ' + cn + ' — مركز التراث لتحفيظ القرآن الكريم — فرع الجهراء';
-  const printDate = `تاريخ الطباعة: ${new Date().toLocaleDateString('ar-KW')} | عدد الطلاب المسجّلين: ${activeList.length}`;
-  document.getElementById('print-title').textContent = printTitle;
-  document.getElementById('print-date').textContent = printDate;
+  document.getElementById('print-title').textContent = 'كشف الحفظ والمراجعة — ' + cn + ' — مركز التراث لتحفيظ القرآن الكريم — فرع الجهراء';
+  document.getElementById('print-date').textContent = `تاريخ الطباعة: ${new Date().toLocaleDateString('ar-KW')} | عدد الطلاب: ${activeList.length}`;
   document.getElementById('print-table').innerHTML = `
     <style>#memo-print-table tr td { background: inherit !important; }</style>
     <table id="memo-print-table" style="width:100%;border-collapse:collapse;direction:rtl;font-family:Arial,sans-serif;table-layout:fixed">
