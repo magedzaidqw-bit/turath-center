@@ -1,4 +1,4 @@
-const CACHE_NAME = 'turath-v9';const CACHE_NAME = 'turath-v10';
+const CACHE_NAME = 'turath-v10';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
@@ -18,4 +18,4 @@ self.addEventListener('fetch', e => {
 
 self.addEventListener('message', e => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
-});
+});});
