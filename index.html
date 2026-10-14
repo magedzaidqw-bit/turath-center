@@ -374,6 +374,7 @@ tbody tr:hover { background:#fbfaf6; }
 .qk-in{display:grid;grid-template-columns:minmax(110px,1.6fr) 70px 70px auto;gap:6px;align-items:center;margin-top:4px}
 .qk-in select,.qk-in input,.qk-m{padding:7px 6px;border:1.5px solid var(--gray2);border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;width:100%}
 .qk-n{font-size:11px;font-weight:700;min-width:44px}
+.qk-ts{grid-column:1/-1;font-size:11px!important;color:var(--mid);padding:4px 6px!important}
 .qk-m{margin-top:2px}
 @media (max-width:520px){.qk-in{grid-template-columns:1fr 1fr 1fr}.qk-in select{grid-column:1/-1}}
 .fr-hero{background:linear-gradient(135deg,var(--gd),var(--gm));border-radius:22px;padding:26px 18px 56px;text-align:center;color:#fff;border-bottom:4px solid var(--gold)}
@@ -1306,7 +1307,8 @@ function buildPages() {
   <div class="page" id="p-memorization">
     <div class="stitle">📖 سجل الحفظ والمراجعة</div>
     <div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center">
-      <button class="btn" onclick="openQuick()" style="background:linear-gradient(135deg,#C9A961,#1a5230);color:white;border:none;padding:10px 18px;border-radius:10px;font-family:'Cairo',sans-serif;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)">⚡ تسجيل سريع للحلقة (حفظ + مراجعة)</button>
+      <button class="btn" onclick="openQuick()" style="background:linear-gradient(135deg,#C9A961,#1a5230);color:white;border:none;padding:14px 26px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.25)">⚡ تسجيل سريع للحلقة (حفظ + مراجعة)</button>
+      <details style="display:inline-block"><summary style="cursor:pointer;font-size:12px;color:var(--mid);padding:8px 6px;font-weight:700">طرق أخرى للتسجيل ▾</summary><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
       <!-- مجموعة الحفظ -->
       <div style="display:inline-flex;gap:4px;background:#e8f5e9;border:1.5px solid #1a5230;border-radius:12px;padding:4px">
         <button class="btn" onclick="openMemoM('hifz')" style="background:#1a5230;color:white;border:none;padding:8px 14px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer">📖 حفظ فردي</button>
@@ -1317,6 +1319,7 @@ function buildPages() {
         <button class="btn" onclick="openMemoM('muraja')" style="background:#14568f;color:white;border:none;padding:8px 14px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer">🔄 مراجعة فردية</button>
         <button class="btn" onclick="openBulkReview()" style="background:#1a6bab;color:white;border:none;padding:8px 14px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer">🔁 مراجعة جماعية</button>
       </div>
+      </div></details>
       <select id="memo-circle" class="btn-o" onchange="loadMemo()" style="min-width:140px"><option value="">جميع الحلقات</option></select>
     </div>
     <div class="card"><div class="ch"><h3>سجل الحفظ والمراجعة</h3><button class="btn btn-o btn-sm" onclick="printMemoHistory()">🖨️ طباعة كشف الحلقة</button></div><div class="cb"><div class="tw"><table id="memo-body-table"><thead><tr><th>الطالب</th><th>النوع</th><th>من</th><th>إلى</th><th>الآيات</th><th>الإتقان</th><th>التاريخ</th><th>إجراءات</th></tr></thead><tbody id="memo-body"></tbody></table></div></div></div>
@@ -1575,6 +1578,22 @@ function buildModals() {
     <div style="background:#e3f3e8;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#1d6b3a">
       السورة وآية البداية معبّأتان تلقائياً من آخر نقطة لكل طالب. اكتب فقط آية <strong>"إلى"</strong> لمن حفظ أو راجع اليوم، ومن تتركه فارغاً لا يُسجَّل.
     </div>
+    <details style="margin-bottom:10px;border:1.5px dashed var(--gold);border-radius:10px;padding:8px 12px">
+      <summary style="cursor:pointer;font-weight:800;font-size:13px">📚 تطبيق نفس المقطع على كل طلاب الحلقة</summary>
+      <div style="margin-top:8px">
+        <div class="fgrid">
+          <div class="fg"><label>النوع</label><select id="qk-ap-kind"><option value="hifz">📖 حفظ</option><option value="muraja">🔄 مراجعة</option></select></div>
+          <div class="fg"><label>من سورة</label><select id="qk-ap-s"></select></div>
+        </div>
+        <div class="fgrid">
+          <div class="fg"><label>من آية</label><input type="number" id="qk-ap-f" min="1" value="1"></div>
+          <div class="fg"><label>إلى سورة (اتركها فارغة إن كانت نفسها)</label><select id="qk-ap-ts"></select></div>
+        </div>
+        <div class="fg"><label>إلى آية</label><input type="number" id="qk-ap-t" min="1"></div>
+        <button class="btn btn-o" onclick="quickApplyAll()">تطبيق على الجميع</button>
+        <small style="display:block;margin-top:6px;color:var(--mid)">يملأ الحقول لكل الطلاب، وبعدها يمكنك تعديل أي طالب أو مسح آية "إلى" لمن لم يحضر.</small>
+      </div>
+    </details>
     <div id="qk-rows"></div>
     <button class="btn-pri" id="qk-save" onclick="quickSave()" style="margin-top:12px">💾 حفظ الكل</button>
   </div></div></div>
@@ -3295,6 +3314,8 @@ async function openQuick() {
   document.getElementById('qk-date').value = today();
   document.getElementById('qk-date').max = today();
   document.getElementById('qk-dir').value = qkDir();
+  document.getElementById('qk-ap-s').innerHTML = SURAHS.map(x => `<option value="${x.name}">${x.n}. ${x.name}</option>`).join('');
+  document.getElementById('qk-ap-ts').innerHTML = '<option value="">نفس السورة</option>' + SURAHS.map(x => `<option value="${x.name}">${x.n}. ${x.name}</option>`).join('');
   document.getElementById('qk-rows').innerHTML = '<div style="color:#999;padding:20px;text-align:center">جاري التحميل...</div>';
   openM('m-quick');
   let q = sb.from('circles').select('id,name').order('name');
@@ -3333,6 +3354,7 @@ function quickRender() {
   if (!_qk.students.length) { box.innerHTML = '<div style="color:#999;padding:20px;text-align:center">لا يوجد طلاب في هذه الحلقة</div>'; return; }
   const dir = v('qk-dir') || 'asc';
   const opts = '<option value="">—</option>' + SURAHS.map(s => `<option value="${s.name}">${s.n}. ${s.name}</option>`).join('');
+  const optsTo = '<option value="">↔ إلى نفس السورة</option>' + SURAHS.map(s => `<option value="${s.name}">إلى سورة ${s.name}</option>`).join('');
   const block = (kind, sid, label, color) => {
     const last = _qk.last[kind][sid];
     const nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
@@ -3341,9 +3363,10 @@ function quickRender() {
       <div class="qk-lbl" style="color:${color}">${label} <small>${lastTxt}</small></div>
       <div class="qk-in">
         <select id="qk-${kind}-s-${sid}" onchange="quickSurahChange('${kind}','${sid}')">${opts.replace(`value="${nx?nx.surah:'__'}"`, `value="${nx?nx.surah:''}" selected`)}</select>
-        <input type="number" inputmode="numeric" min="1" id="qk-${kind}-f-${sid}" placeholder="من" value="${nx?nx.ayah:''}">
+        <input type="number" inputmode="numeric" min="1" id="qk-${kind}-f-${sid}" placeholder="من" value="${nx?nx.ayah:''}" oninput="quickCnt('${kind}','${sid}')">
         <input type="number" inputmode="numeric" min="1" id="qk-${kind}-t-${sid}" placeholder="إلى" oninput="quickCnt('${kind}','${sid}')">
         <span class="qk-n" id="qk-${kind}-n-${sid}"></span>
+        <select id="qk-${kind}-ts-${sid}" class="qk-ts" onchange="quickCnt('${kind}','${sid}')" title="اختر سورة النهاية فقط إن عبر المقطع سورتين">${optsTo}</select>
       </div></div>`;
   };
   box.innerHTML = _qk.students.map(s => `<div class="qk-card">
@@ -3353,18 +3376,45 @@ function quickRender() {
     <select id="qk-m-${s.id}" class="qk-m"><option value="good">✅ جيد</option><option value="excellent">⭐ ممتاز</option><option value="needs_review">🔄 يحتاج مراجعة</option><option value="weak">⚠️ ضعيف</option></select>
   </div>`).join('');
 }
+function qkSegments(sName, f, tsName, t) {
+  const A = SURAHS.find(x => x.name === sName), B = tsName ? SURAHS.find(x => x.name === tsName) : A;
+  if (!A || !B || !f || !t) return null;
+  if (A.n === B.n) return (f < 1 || t < f || t > A.v) ? null : [{ s: A, f, t }];
+  const step = B.n > A.n ? 1 : -1, out = [];
+  for (let n = A.n; ; n += step) {
+    const S = SURAHS[n - 1], first = n === A.n, last = n === B.n;
+    const ff = first ? f : 1, tt = last ? t : S.v;
+    if (ff < 1 || ff > S.v || tt < 1 || tt > S.v || tt < ff) return null;
+    out.push({ s: S, f: ff, t: tt });
+    if (last) break;
+  }
+  return out;
+}
 function quickSurahChange(kind, sid) {
   const s = SURAHS.find(x => x.name === v(`qk-${kind}-s-${sid}`));
   const f = document.getElementById(`qk-${kind}-f-${sid}`);
-  if (s) { f.value = 1; f.max = s.v; document.getElementById(`qk-${kind}-t-${sid}`).max = s.v; }
+  if (s) f.value = 1;
   quickCnt(kind, sid);
 }
 function quickCnt(kind, sid) {
-  const s = SURAHS.find(x => x.name === v(`qk-${kind}-s-${sid}`));
-  const f = parseInt(v(`qk-${kind}-f-${sid}`)), t = parseInt(v(`qk-${kind}-t-${sid}`));
   const el = document.getElementById(`qk-${kind}-n-${sid}`);
-  el.textContent = (s && f && t && t >= f && t <= s.v) ? `${t - f + 1} آية` : '';
+  const t = parseInt(v(`qk-${kind}-t-${sid}`));
+  if (!t) { el.textContent = ''; return; }
+  const seg = qkSegments(v(`qk-${kind}-s-${sid}`), parseInt(v(`qk-${kind}-f-${sid}`)), v(`qk-${kind}-ts-${sid}`), t);
+  if (!seg) { el.textContent = '⚠️'; el.style.color = '#b3261e'; return; }
+  el.textContent = seg.reduce((n, x) => n + x.t - x.f + 1, 0) + ' آية';
   el.style.color = '#1d6b3a';
+}
+function quickApplyAll() {
+  const kind = v('qk-ap-kind'), sName = v('qk-ap-s'), f = parseInt(v('qk-ap-f')), t = parseInt(v('qk-ap-t')), ts = v('qk-ap-ts');
+  if (!qkSegments(sName, f, ts, t)) { alert('⛔ تحقق من المقطع: السورة وآية البداية وآية النهاية.'); return; }
+  _qk.students.forEach(st => {
+    document.getElementById(`qk-${kind}-s-${st.id}`).value = sName;
+    document.getElementById(`qk-${kind}-f-${st.id}`).value = f;
+    document.getElementById(`qk-${kind}-ts-${st.id}`).value = ts;
+    document.getElementById(`qk-${kind}-t-${st.id}`).value = t;
+    quickCnt(kind, st.id);
+  });
 }
 async function quickSave() {
   const date = v('qk-date');
@@ -3374,12 +3424,14 @@ async function quickSave() {
   for (const st of _qk.students) {
     const mastery = v(`qk-m-${st.id}`) || 'good';
     for (const kind of ['hifz', 'muraja']) {
-      const sName = v(`qk-${kind}-s-${st.id}`), fRaw = v(`qk-${kind}-f-${st.id}`), tRaw = v(`qk-${kind}-t-${st.id}`);
+      const tRaw = v(`qk-${kind}-t-${st.id}`);
       if (!tRaw) continue; // لا نسجّل إن لم تُكتب آية النهاية
-      const s = SURAHS.find(x => x.name === sName), f = parseInt(fRaw), t = parseInt(tRaw);
-      if (!s || !f || !t || f < 1 || t < f || t > s.v) { errs.push(`${st.full_name} (${kind==='hifz'?'حفظ':'مراجعة'}): تحقق من السورة والآيات`); continue; }
-      const row = { student_id: st.id, date, surah_from: s.name, ayah_from: f, surah_to: s.name, ayah_to: t, mastery, recorded_by: CU.id };
-      if (kind === 'hifz') { row.verses_count = t - f + 1; hifz.push(row); } else mur.push(row);
+      const seg = qkSegments(v(`qk-${kind}-s-${st.id}`), parseInt(v(`qk-${kind}-f-${st.id}`)), v(`qk-${kind}-ts-${st.id}`), parseInt(tRaw));
+      if (!seg) { errs.push(`${st.full_name} (${kind==='hifz'?'حفظ':'مراجعة'}): تحقق من السورة والآيات`); continue; }
+      seg.forEach(x => {
+        const row = { student_id: st.id, date, surah_from: x.s.name, ayah_from: x.f, surah_to: x.s.name, ayah_to: x.t, mastery, recorded_by: CU.id };
+        if (kind === 'hifz') { row.verses_count = x.t - x.f + 1; hifz.push(row); } else mur.push(row);
+      });
       pts.push([st.id, mastery]);
     }
   }
