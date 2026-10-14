@@ -372,10 +372,15 @@ tbody tr:hover { background:#fbfaf6; }
 .qk-blk{border-right:4px solid;padding:4px 10px;margin-bottom:6px;background:#fafafa;border-radius:8px}
 .qk-lbl{font-size:12px;font-weight:800}.qk-lbl small{font-weight:400;color:var(--mid);margin-right:6px}
 .qk-in{display:grid;grid-template-columns:minmax(110px,1.6fr) 70px 70px auto;gap:6px;align-items:center;margin-top:4px}
-.qk-in select,.qk-in input,.qk-m{padding:7px 6px;border:1.5px solid var(--gray2);border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;width:100%}
+.qk-in select,.qk-in input{padding:7px 6px;border:1.5px solid var(--gray2);border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;width:100%}
 .qk-n{font-size:11px;font-weight:700;min-width:44px}
 .qk-ts{grid-column:1/-1;font-size:11px!important;color:var(--mid);padding:4px 6px!important}
-.qk-m{margin-top:2px}
+.qk-mq{float:left;width:auto!important;padding:2px 4px!important;font-size:11px!important}
+.qk-badge{font-size:11px;font-weight:700;margin-right:6px;color:#b45309}
+.qk-card[data-state=filled]{border-color:#1d6b3a;background:#f3fbf5}.qk-card[data-state=filled] .qk-badge{color:#1d6b3a}
+.qk-card[data-state=done]{border-color:#14568f}.qk-card[data-state=done] .qk-badge{color:#14568f}
+.qk-card[data-state=absent]{opacity:.6;background:#f3f3f3}.qk-card[data-state=absent] .qk-badge{color:#777}
+.qk-card[data-state=todo]{border-color:#e0b26a}
 @media (max-width:520px){.qk-in{grid-template-columns:1fr 1fr 1fr}.qk-in select{grid-column:1/-1}}
 .fr-hero{background:linear-gradient(135deg,var(--gd),var(--gm));border-radius:22px;padding:26px 18px 56px;text-align:center;color:#fff;border-bottom:4px solid var(--gold)}
 .fr-orn{color:var(--gold);letter-spacing:8px;font-size:15px}
@@ -1571,7 +1576,7 @@ function buildModals() {
   <div class="mb">
     <div class="fgrid">
       <div class="fg"><label>الحلقة</label><select id="qk-circle" onchange="quickLoad()"></select></div>
-      <div class="fg"><label>التاريخ</label><input type="date" id="qk-date"></div>
+      <div class="fg"><label>التاريخ</label><input type="date" id="qk-date" onchange="quickStatus()"></div>
     </div>
     <div class="fg"><label>اتجاه الحفظ (يحدّد السورة التالية تلقائياً)</label>
       <select id="qk-dir" onchange="quickDirChange()"><option value="asc">تصاعدي — من الفاتحة (البقرة بعد الفاتحة…)</option><option value="desc">تنازلي — من الناس (الفلق بعد الناس…)</option></select></div>
@@ -1594,6 +1599,7 @@ function buildModals() {
         <small style="display:block;margin-top:6px;color:var(--mid)">يملأ الحقول لكل الطلاب، وبعدها يمكنك تعديل أي طالب أو مسح آية "إلى" لمن لم يحضر.</small>
       </div>
     </details>
+    <div id="qk-summary" style="position:sticky;top:0;z-index:2;background:#fff;padding:8px 4px;border-bottom:1px solid var(--gray2);font-size:13px;font-weight:700;margin-bottom:8px"></div>
     <div id="qk-rows"></div>
     <button class="btn-pri" id="qk-save" onclick="quickSave()" style="margin-top:12px">💾 حفظ الكل</button>
   </div></div></div>
@@ -3360,7 +3366,8 @@ function quickRender() {
     const nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
     const lastTxt = last ? `آخر نقطة: ${last.surah_to} ${last.ayah_to}` : 'لا يوجد تسجيل سابق';
     return `<div class="qk-blk" style="border-color:${color}">
-      <div class="qk-lbl" style="color:${color}">${label} <small>${lastTxt}</small></div>
+      <div class="qk-lbl" style="color:${color}">${label} <small>${lastTxt}</small>
+        <select id="qk-${kind==='hifz'?'mh':'mm'}-${sid}" class="qk-mq" title="تقدير ${kind==='hifz'?'الحفظ':'المراجعة'}"><option value="good">✅ جيد</option><option value="excellent">⭐ ممتاز</option><option value="needs_review">🔄 يحتاج مراجعة</option><option value="weak">⚠️ ضعيف</option></select></div>
       <div class="qk-in">
         <select id="qk-${kind}-s-${sid}" onchange="quickSurahChange('${kind}','${sid}')">${opts.replace(`value="${nx?nx.surah:'__'}"`, `value="${nx?nx.surah:''}" selected`)}</select>
         <input type="number" inputmode="numeric" min="1" id="qk-${kind}-f-${sid}" placeholder="من" value="${nx?nx.ayah:''}" oninput="quickCnt('${kind}','${sid}')">
@@ -3369,12 +3376,47 @@ function quickRender() {
         <select id="qk-${kind}-ts-${sid}" class="qk-ts" onchange="quickCnt('${kind}','${sid}')" title="اختر سورة النهاية فقط إن عبر المقطع سورتين">${optsTo}</select>
       </div></div>`;
   };
-  box.innerHTML = _qk.students.map(s => `<div class="qk-card">
-    <div class="qk-name">${escapeHtml(s.full_name)}</div>
+  box.innerHTML = _qk.students.map(s => `<div class="qk-card" id="qk-card-${s.id}" oninput="quickMark()" onchange="quickMark()">
+    <div class="qk-name">${escapeHtml(s.full_name)} <span class="qk-badge" id="qk-badge-${s.id}"></span></div>
     ${block('hifz', s.id, '📖 حفظ', '#1a5230')}
     ${block('muraja', s.id, '🔄 مراجعة', '#14568f')}
-    <select id="qk-m-${s.id}" class="qk-m"><option value="good">✅ جيد</option><option value="excellent">⭐ ممتاز</option><option value="needs_review">🔄 يحتاج مراجعة</option><option value="weak">⚠️ ضعيف</option></select>
   </div>`).join('');
+  quickStatus();
+}
+// حالة اليوم: من غاب، ومن سُجّل له بالفعل، ومن لم يُسجَّل بعد (لتفادي نسيان طالب سمّع)
+async function quickStatus() {
+  const date = v('qk-date'); const ids = _qk.students.map(s => s.id);
+  _qk.absent = new Set(); _qk.done = new Set();
+  if (ids.length && date) {
+    try {
+      const [a, h, m] = await Promise.all([
+        sb.from('attendance').select('student_id,status').eq('date', date).in('student_id', ids),
+        sb.from('memorization_log').select('student_id').eq('date', date).in('student_id', ids),
+        sb.from('review_log').select('student_id').eq('date', date).in('student_id', ids)
+      ]);
+      (a.data||[]).forEach(x => { if (x.status === 'absent' || x.status === 'excused') _qk.absent.add(x.student_id); });
+      (h.data||[]).forEach(x => _qk.done.add(x.student_id));
+      (m.data||[]).forEach(x => _qk.done.add(x.student_id));
+    } catch(e) {}
+  }
+  quickMark();
+}
+function quickFilled(sid) { return !!(v(`qk-hifz-t-${sid}`) || v(`qk-muraja-t-${sid}`)); }
+function quickMark() {
+  let filled = 0, done = 0, absent = 0, todo = 0;
+  _qk.students.forEach(st => {
+    const card = document.getElementById(`qk-card-${st.id}`), bd = document.getElementById(`qk-badge-${st.id}`);
+    if (!card) return;
+    const f = quickFilled(st.id), isAbs = _qk.absent && _qk.absent.has(st.id), isDone = _qk.done && _qk.done.has(st.id);
+    let state = 'todo', txt = '';
+    if (f) { state = 'filled'; txt = '✔ جاهز للحفظ'; filled++; }
+    else if (isDone) { state = 'done'; txt = '✔ سُجّل اليوم سابقاً'; done++; }
+    else if (isAbs) { state = 'absent'; txt = 'غائب'; absent++; }
+    else { txt = 'لم يُسجَّل بعد'; todo++; }
+    card.dataset.state = state; bd.textContent = txt;
+  });
+  const el = document.getElementById('qk-summary');
+  if (el) el.innerHTML = `<span style="color:#1d6b3a">✔ ${filled} جاهز</span> · <span style="color:#14568f">${done} سُجّل سابقاً</span> · <span style="color:#777">${absent} غائب</span> · <span style="color:${todo?'#b45309':'#1d6b3a'};font-weight:800">${todo} لم يُسجَّل بعد</span>`;
 }
 function qkSegments(sName, f, tsName, t) {
   const A = SURAHS.find(x => x.name === sName), B = tsName ? SURAHS.find(x => x.name === tsName) : A;
@@ -3415,6 +3457,7 @@ function quickApplyAll() {
     document.getElementById(`qk-${kind}-t-${st.id}`).value = t;
     quickCnt(kind, st.id);
   });
+  quickMark();
 }
 async function quickSave() {
   const date = v('qk-date');
@@ -3422,8 +3465,8 @@ async function quickSave() {
   if (date > today()) { alert('⛔ لا يمكن التسجيل بتاريخ في المستقبل.'); return; }
   const hifz = [], mur = [], pts = [], errs = [];
   for (const st of _qk.students) {
-    const mastery = v(`qk-m-${st.id}`) || 'good';
     for (const kind of ['hifz', 'muraja']) {
+      const mastery = v(`qk-${kind==='hifz'?'mh':'mm'}-${st.id}`) || 'good';
       const tRaw = v(`qk-${kind}-t-${st.id}`);
       if (!tRaw) continue; // لا نسجّل إن لم تُكتب آية النهاية
       const seg = qkSegments(v(`qk-${kind}-s-${st.id}`), parseInt(v(`qk-${kind}-f-${st.id}`)), v(`qk-${kind}-ts-${st.id}`), parseInt(tRaw));
@@ -3437,6 +3480,9 @@ async function quickSave() {
   }
   if (errs.length) { alert('⛔ لم يُحفظ شيء، صحّح التالي:\n\n' + errs.join('\n')); return; }
   if (!hifz.length && !mur.length) { alert('لم تُدخل أي بيانات. اكتب آية "إلى" للطالب الذي تريد تسجيله.'); return; }
+  // تفادي نسيان طالب: من لم يُسجَّل له ولم يغب ولم يُسجَّل سابقاً اليوم
+  const forgotten = _qk.students.filter(st => !quickFilled(st.id) && !(_qk.absent && _qk.absent.has(st.id)) && !(_qk.done && _qk.done.has(st.id)));
+  if (forgotten.length && !confirm(`⚠️ لم يُسجَّل شيء لهؤلاء الطلاب (${forgotten.length}):\n\n` + forgotten.map(x => '• ' + x.full_name).join('\n') + `\n\nهل لم يسمّعوا اليوم فعلاً؟\nموافق = احفظ كما هو\nإلغاء = ارجع وأكمل تسجيلهم`)) return;
   // تنبيه التكرار بنفس التاريخ
   const ids = [...new Set([...hifz, ...mur].map(r => r.student_id))];
   const [d1, d2] = await Promise.all([

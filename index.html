@@ -376,6 +376,8 @@ tbody tr:hover { background:#fbfaf6; }
 .qk-n{font-size:11px;font-weight:700;min-width:44px}
 .qk-ts{grid-column:1/-1;font-size:11px!important;color:var(--mid);padding:4px 6px!important}
 .qk-mq{float:left;width:auto!important;padding:2px 4px!important;font-size:11px!important}
+.qk-name{cursor:pointer}
+.qk-collapsed .qk-blk{display:none}.qk-collapsed{opacity:.75}
 .qk-badge{font-size:11px;font-weight:700;margin-right:6px;color:#b45309}
 .qk-card[data-state=filled]{border-color:#1d6b3a;background:#f3fbf5}.qk-card[data-state=filled] .qk-badge{color:#1d6b3a}
 .qk-card[data-state=done]{border-color:#14568f}.qk-card[data-state=done] .qk-badge{color:#14568f}
@@ -1572,7 +1574,7 @@ function buildModals() {
     <button class="btn-pri" onclick="saveStudent()">حفظ</button>
   </div></div></div>
 
-  <div class="mo" id="m-quick"><div class="modal" style="max-width:760px"><div class="mh"><h3>⚡ تسجيل سريع للحلقة</h3><button class="mc" onclick="closeM('m-quick')">✕</button></div>
+  <div class="mo" id="m-quick"><div class="modal" style="max-width:760px"><div class="mh"><h3>⚡ تسجيل سريع للحلقة</h3><button class="mc" onclick="quickClose()">✕</button></div>
   <div class="mb">
     <div class="fgrid">
       <div class="fg"><label>الحلقة</label><select id="qk-circle" onchange="quickLoad()"></select></div>
@@ -1581,7 +1583,7 @@ function buildModals() {
     <div class="fg"><label>اتجاه الحفظ (يحدّد السورة التالية تلقائياً)</label>
       <select id="qk-dir" onchange="quickDirChange()"><option value="asc">تصاعدي — من الفاتحة (البقرة بعد الفاتحة…)</option><option value="desc">تنازلي — من الناس (الفلق بعد الناس…)</option></select></div>
     <div style="background:#e3f3e8;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#1d6b3a">
-      السورة وآية البداية معبّأتان تلقائياً من آخر نقطة لكل طالب. اكتب فقط آية <strong>"إلى"</strong> لمن حفظ أو راجع اليوم، ومن تتركه فارغاً لا يُسجَّل.
+      السورة وآية البداية معبّأتان تلقائياً من آخر نقطة لكل طالب. اكتب فقط آية <strong>"إلى"</strong> لمن حفظ أو راجع، ثم اضغط <strong>حفظ</strong>. يمكنك تسجيل الطلاب على دفعات أثناء الحلقة؛ تبقى الشاشة مفتوحة ويُنزَل من سُجّل له لأسفل القائمة.
     </div>
     <details style="margin-bottom:10px;border:1.5px dashed var(--gold);border-radius:10px;padding:8px 12px">
       <summary style="cursor:pointer;font-weight:800;font-size:13px">📚 تطبيق نفس المقطع على كل طلاب الحلقة</summary>
@@ -1601,7 +1603,13 @@ function buildModals() {
     </details>
     <div id="qk-summary" style="position:sticky;top:0;z-index:2;background:#fff;padding:8px 4px;border-bottom:1px solid var(--gray2);font-size:13px;font-weight:700;margin-bottom:8px"></div>
     <div id="qk-rows"></div>
-    <button class="btn-pri" id="qk-save" onclick="quickSave()" style="margin-top:12px">💾 حفظ الكل</button>
+    <div style="position:sticky;bottom:0;background:#fff;padding:10px 0;margin-top:10px;border-top:1px solid var(--gray2)">
+      <div id="qk-toast" style="display:none;background:#e3f3e8;color:#1d6b3a;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:13px;font-weight:700"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-pri" id="qk-save" onclick="quickSave()" style="flex:2">💾 حفظ ما أُدخل (والاستمرار)</button>
+        <button class="btn btn-o" onclick="quickFinish()" style="flex:1">✅ إنهاء التسجيل</button>
+      </div>
+    </div>
   </div></div></div>
   <div class="mo" id="m-memo"><div class="modal"><div class="mh"><h3 id="memo-title">تسجيل حفظ</h3><button class="mc" onclick="closeM('m-memo')">✕</button></div>
   <div class="mb">
@@ -3343,7 +3351,7 @@ async function quickLoad() {
   box.innerHTML = '<div style="color:#999;padding:20px;text-align:center">جاري تحميل الطلاب...</div>';
   const { data: studs } = await sb.from('students').select('id,full_name').eq('circle_id', cid).order('full_name');
   _qk.students = studs || [];
-  _qk.last = { hifz: {}, muraja: {} };
+  _qk.last = { hifz: {}, muraja: {} }; _qk.sess = new Set();
   if (_qk.students.length) {
     const ids = _qk.students.map(s => s.id);
     const get = (tbl) => fetchAllRows(() => sb.from(tbl).select('student_id,surah_to,ayah_to,date,created_at').in('student_id', ids).lte('date', today()).order('date',{ascending:false}).order('created_at',{ascending:false}));
@@ -3366,7 +3374,7 @@ function quickRender() {
     const nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
     const lastTxt = last ? `آخر نقطة: ${last.surah_to} ${last.ayah_to}` : 'لا يوجد تسجيل سابق';
     return `<div class="qk-blk" style="border-color:${color}">
-      <div class="qk-lbl" style="color:${color}">${label} <small>${lastTxt}</small>
+      <div class="qk-lbl" style="color:${color}">${label} <small id="qk-last-${kind}-${sid}">${lastTxt}</small>
         <select id="qk-${kind==='hifz'?'mh':'mm'}-${sid}" class="qk-mq" title="تقدير ${kind==='hifz'?'الحفظ':'المراجعة'}"><option value="good">✅ جيد</option><option value="excellent">⭐ ممتاز</option><option value="needs_review">🔄 يحتاج مراجعة</option><option value="weak">⚠️ ضعيف</option></select></div>
       <div class="qk-in">
         <select id="qk-${kind}-s-${sid}" onchange="quickSurahChange('${kind}','${sid}')">${opts.replace(`value="${nx?nx.surah:'__'}"`, `value="${nx?nx.surah:''}" selected`)}</select>
@@ -3377,7 +3385,7 @@ function quickRender() {
       </div></div>`;
   };
   box.innerHTML = _qk.students.map(s => `<div class="qk-card" id="qk-card-${s.id}" oninput="quickMark()" onchange="quickMark()">
-    <div class="qk-name">${escapeHtml(s.full_name)} <span class="qk-badge" id="qk-badge-${s.id}"></span></div>
+    <div class="qk-name" onclick="this.parentElement.classList.toggle('qk-collapsed')">${escapeHtml(s.full_name)} <span class="qk-badge" id="qk-badge-${s.id}"></span></div>
     ${block('hifz', s.id, '📖 حفظ', '#1a5230')}
     ${block('muraja', s.id, '🔄 مراجعة', '#14568f')}
   </div>`).join('');
@@ -3480,9 +3488,6 @@ async function quickSave() {
   }
   if (errs.length) { alert('⛔ لم يُحفظ شيء، صحّح التالي:\n\n' + errs.join('\n')); return; }
   if (!hifz.length && !mur.length) { alert('لم تُدخل أي بيانات. اكتب آية "إلى" للطالب الذي تريد تسجيله.'); return; }
-  // تفادي نسيان طالب: من لم يُسجَّل له ولم يغب ولم يُسجَّل سابقاً اليوم
-  const forgotten = _qk.students.filter(st => !quickFilled(st.id) && !(_qk.absent && _qk.absent.has(st.id)) && !(_qk.done && _qk.done.has(st.id)));
-  if (forgotten.length && !confirm(`⚠️ لم يُسجَّل شيء لهؤلاء الطلاب (${forgotten.length}):\n\n` + forgotten.map(x => '• ' + x.full_name).join('\n') + `\n\nهل لم يسمّعوا اليوم فعلاً؟\nموافق = احفظ كما هو\nإلغاء = ارجع وأكمل تسجيلهم`)) return;
   // تنبيه التكرار بنفس التاريخ
   const ids = [...new Set([...hifz, ...mur].map(r => r.student_id))];
   const [d1, d2] = await Promise.all([
@@ -3490,21 +3495,52 @@ async function quickSave() {
     mur.length ? sb.from('review_log').select('student_id').eq('date', date).in('student_id', ids) : { data: [] }
   ]);
   const dupSet = new Set([...(d1.data||[]).map(x=>x.student_id), ...(d2.data||[]).map(x=>x.student_id)]);
-  const dupHere = ids.filter(i => dupSet.has(i)).length;
+  _qk.sess = _qk.sess || new Set();
+  const dupHere = ids.filter(i => dupSet.has(i) && !_qk.sess.has(i)).length;
   if (dupHere && !confirm(`يوجد تسجيل سابق بنفس التاريخ لعدد ${dupHere} طالب.\nهل تريد إضافة التسجيل الجديد مع ذلك؟`)) return;
   const btn = document.getElementById('qk-save'); btn.disabled = true; btn.textContent = 'جاري الحفظ...';
   try {
     if (hifz.length) { const { error } = await sb.from('memorization_log').insert(hifz); if (error) throw error; }
     if (mur.length) { const { error } = await sb.from('review_log').insert(mur); if (error) throw error; }
   } catch (e) {
-    alert('❌ لم يُحفظ: ' + (e.message || e)); btn.disabled = false; btn.textContent = '💾 حفظ الكل'; return;
+    alert('❌ لم يُحفظ: ' + (e.message || e)); btn.disabled = false; btn.textContent = '💾 حفظ ما أُدخل (والاستمرار)'; return;
   }
   // نقاط الإتقان كما في التسجيل الفردي
   await Promise.all(pts.map(([sid, m]) => m === 'excellent' ? addPts(sid, 10, 'حفظ ممتاز') : m === 'good' ? addPts(sid, 5, 'حفظ جيد') : null).filter(Boolean));
-  btn.disabled = false; btn.textContent = '💾 حفظ الكل';
-  closeM('m-quick');
-  alert(`✅ تم حفظ ${hifz.length} تسجيل حفظ و${mur.length} تسجيل مراجعة`);
+  btn.disabled = false; btn.textContent = '💾 حفظ ما أُدخل (والاستمرار)';
+  // نبقي الشاشة مفتوحة: نُقفل بطاقات من حُفظ لهم، ونحدّث نقطتهم الأخيرة، ونُنزلهم لأسفل القائمة
+  const box = document.getElementById('qk-rows'), dir = v('qk-dir') || 'asc';
+  const savedIds = [...new Set([...hifz, ...mur].map(r => r.student_id))];
+  savedIds.forEach(sid => {
+    _qk.sess.add(sid); _qk.done.add(sid);
+    [['hifz', hifz], ['muraja', mur]].forEach(([kind, rows]) => {
+      const mine = rows.filter(r => r.student_id === sid); if (!mine.length) return;
+      const lastRow = mine[mine.length - 1];
+      _qk.last[kind][sid] = { surah_to: lastRow.surah_to, ayah_to: lastRow.ayah_to, date };
+      const nx = qkNext(lastRow.surah_to, lastRow.ayah_to, dir);
+      const lbl = document.getElementById(`qk-last-${kind}-${sid}`); if (lbl) lbl.textContent = `آخر نقطة: ${lastRow.surah_to} ${lastRow.ayah_to}`;
+      if (nx) { document.getElementById(`qk-${kind}-s-${sid}`).value = nx.surah; document.getElementById(`qk-${kind}-f-${sid}`).value = nx.ayah; }
+      document.getElementById(`qk-${kind}-t-${sid}`).value = ''; document.getElementById(`qk-${kind}-ts-${sid}`).value = ''; quickCnt(kind, sid);
+    });
+    const card = document.getElementById(`qk-card-${sid}`);
+    if (card) { card.classList.add('qk-collapsed'); box.appendChild(card); }
+  });
+  quickMark();
+  const tip = document.getElementById('qk-toast'); tip.textContent = `✅ حُفظ ${savedIds.length} طالب (${hifz.length} حفظ، ${mur.length} مراجعة) — تابع مع بقية الطلاب`;
+  tip.style.display = 'block'; setTimeout(() => { tip.style.display = 'none'; }, 5000);
   loadMemo();
+}
+function quickUnsaved() { return _qk.students.some(st => quickFilled(st.id)); }
+function quickClose() {
+  if (quickUnsaved() && !confirm('يوجد تسجيل أدخلته ولم تحفظه بعد. هل تريد إغلاق الشاشة وتجاهله؟')) return;
+  closeM('m-quick'); loadMemo();
+}
+// إنهاء الجلسة: تنبيه بمن لم يُسجَّل له أي شيء
+function quickFinish() {
+  if (quickUnsaved()) { alert('⚠️ هناك بيانات أدخلتها ولم تحفظها بعد.\nاضغط "حفظ ما أُدخل" أولاً ثم أنهِ التسجيل.'); return; }
+  const forgotten = _qk.students.filter(st => !(_qk.absent && _qk.absent.has(st.id)) && !(_qk.done && _qk.done.has(st.id)));
+  if (forgotten.length && !confirm(`⚠️ لم يُسجَّل شيء لهؤلاء الطلاب (${forgotten.length}):\n\n` + forgotten.map(x => '• ' + x.full_name).join('\n') + `\n\nهل لم يسمّعوا اليوم فعلاً؟\nموافق = إنهاء التسجيل\nإلغاء = ارجع وأكمل تسجيلهم`)) return;
+  closeM('m-quick'); loadMemo();
 }
 
 async function openMemoM(type) {
