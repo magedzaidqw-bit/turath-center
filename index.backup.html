@@ -1947,6 +1947,40 @@ function previewPhoto(inputId, holderId) {
   }
 }
 
+// ===== صور خاصة: تحويل روابط التخزين العامة إلى روابط موقّعة مؤقتة (تعمل سواء كان المجلد عاماً أو خاصاً) =====
+const _signCache = {};
+function parseStorageUrl(u) {
+  const m = /\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/([^?]+)/.exec(u || '');
+  return m ? { bucket: m[1], path: decodeURIComponent(m[2]) } : null;
+}
+async function signedPhotoUrl(url) {
+  const p = parseStorageUrl(url);
+  if (!p) return url;
+  const c = _signCache[url];
+  if (c && c.exp > Date.now()) return c.url;
+  try {
+    const { data, error } = await sb.storage.from(p.bucket).createSignedUrl(p.path, 3600);
+    if (error || !data || !data.signedUrl) return url;
+    _signCache[url] = { url: data.signedUrl, exp: Date.now() + 50 * 60 * 1000 };
+    return data.signedUrl;
+  } catch (e) { return url; }
+}
+async function openPrivatePhoto(url) {
+  const w = window.open('', '_blank');
+  const u = await signedPhotoUrl(url);
+  if (w) w.location.href = u; else window.location.href = u;
+}
+function signOneImg(img) {
+  const src = img.getAttribute('src') || '';
+  if (!/\/storage\/v1\/object\/public\//.test(src)) return;
+  signedPhotoUrl(src).then(u => { if (u && u !== src && img.getAttribute('src') === src) img.setAttribute('src', u); });
+}
+try {
+  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+    if (n.nodeType !== 1) return;
+    if (n.tagName === 'IMG') signOneImg(n); else if (n.querySelectorAll) n.querySelectorAll('img').forEach(signOneImg);
+  }))).observe(document.documentElement, { childList: true, subtree: true });
+} catch (e) {}
 async function uploadPhoto(inputId, bucket) {
   const input = document.getElementById(inputId);
   if (!input.files || !input.files[0]) return null;
@@ -2590,7 +2624,7 @@ async function loadStudents() {
           <div class="mobile-card-row"><span>المحفظ</span><span>${s.circles?.teacher_name||'—'}</span></div>
           <div class="mobile-card-row"><span>النقاط</span><span>⭐ ${s.total_points||0}</span></div>
           <div class="mobile-card-actions">
-            ${s.civil_id_photo ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="window.open('${s.civil_id_photo}','_blank')">🪪 عرض البطاقة</button><button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')">🗑️</button>` : ''}
+            ${s.civil_id_photo ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="openPrivatePhoto('${s.civil_id_photo}')">🪪 عرض البطاقة</button><button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')">🗑️</button>` : ''}
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#C9A961,#1f5c38);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})">🏅 بطاقة الإنجاز</button>
             <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${s.full_name}')">+نقاط</button>
             <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button>
@@ -2607,7 +2641,7 @@ async function loadStudents() {
       const photo = s.photo ? `<img src="${s.photo}" class="avatar-sm">` : `<div class="avatar-placeholder">${svgAvatar(24)}</div>`;
       const parentBadge = s.parent_id ? `<span title="مرتبط بولي أمر" style="color:#1d6b3a;font-size:16px">👨‍👦</span>` : `<span title="لا يوجد حساب ولي أمر" style="color:var(--gray2);font-size:16px">👤</span>`;
       const civilBtn = s.civil_id_photo
-        ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="window.open('${s.civil_id_photo}','_blank')" title="عرض البطاقة المدنية">🪪 عرض</button> <button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')" title="حذف البطاقة المدنية">🗑️</button>`
+        ? `<button class="btn btn-sm" style="background:#e0eefb;color:#14568f;border:1px solid #b8d4f0;font-weight:700" onclick="openPrivatePhoto('${s.civil_id_photo}')" title="عرض البطاقة المدنية">🪪 عرض</button> <button class="btn btn-sm" style="background:#fbe4e4;color:#a3262b;border:1px solid #f0c4c4" onclick="deleteStudentCivilId('${s.id}','${s.civil_id_photo}')" title="حذف البطاقة المدنية">🗑️</button>`
         : `<span title="لا توجد بطاقة مدنية مرفوعة" style="color:var(--gray2);font-size:13px">🪪✕</span>`;
       return `<tr><td style="color:var(--mid);font-weight:700">${i+1}</td><td>${photo}</td><td><strong>${s.full_name}</strong></td><td>${s.circles?.name||'—'}</td><td>${s.circles?.teacher_name||'—'}</td><td>${s.civil_id||'—'}</td><td><span class="pts">⭐ ${s.total_points||0}</span></td>
         <td style="white-space:nowrap">${civilBtn} <button class="btn btn-sm" style="background:linear-gradient(135deg,#C9A961,#1f5c38);color:white;border:none;font-weight:700" onclick="openAchievementModal('${s.id}','${esc(s.full_name)}',${s.total_points||0})" title="بطاقة الإنجاز">🏅</button> <button class="btn btn-gold btn-sm" onclick="openPts('${s.id}','${s.full_name}')">+نقاط</button> <button class="btn btn-o btn-sm" onclick="editStudent('${s.id}')">✏️</button> ${parentBadge} <button class="btn btn-r btn-sm" onclick="delStudent('${s.id}')">حذف</button></td></tr>`;
@@ -4524,9 +4558,11 @@ function renderTop3(container) {
   container.innerHTML = html;
 }
 
-function printTop3Poster() {
+async function printTop3Poster() {
   const picks = _top3Selected.filter(x=>x);
   if (!picks.length) { alert('لا توجد بيانات للطباعة'); return; }
+  const _sp = {};
+  await Promise.all(picks.map(async t => { if (t.student.photo) _sp[t.student.photo] = await signedPhotoUrl(t.student.photo); }));
   const periodDays = parseInt(document.getElementById('top3-period')?.value || '30');
   const periodLabel = periodDays === 0 ? 'كل الفترة' : `آخر ${periodDays} يوماً`;
   const sel = document.getElementById('top3-circle');
@@ -4538,7 +4574,7 @@ function printTop3Poster() {
     const t = _top3Selected[rankIdx];
     if (!t) return '<div></div>';
     const big = rankIdx===0;
-    const ph = t.student.photo ? `<img src="${t.student.photo}">` : `<span>${svgAvatar(big?90:64)}</span>`;
+    const ph = t.student.photo ? `<img src="${_sp[t.student.photo] || t.student.photo}">` : `<span>${svgAvatar(big?90:64)}</span>`;
     return `<div class="c r${rankIdx+1}" style="--c:${col[rankIdx]}">
       <div class="md">${svgMedal(rankIdx, big?64:50)}</div>
       <div class="ph ${big?'big':''}">${ph}</div>
