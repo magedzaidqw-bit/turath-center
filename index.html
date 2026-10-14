@@ -1581,7 +1581,7 @@ function buildModals() {
       <div class="fg"><label>التاريخ</label><input type="date" id="qk-date" onchange="quickStatus()"></div>
     </div>
     <div class="fg"><label>اتجاه الحفظ (يحدّد السورة التالية تلقائياً)</label>
-      <select id="qk-dir" onchange="quickDirChange()"><option value="asc">تصاعدي — من الفاتحة (البقرة بعد الفاتحة…)</option><option value="desc">تنازلي — من الناس (الفلق بعد الناس…)</option></select></div>
+      <select id="qk-dir" onchange="quickDirChange()"><option value="desc">تنازلي — نظام المركز: من الناس نحو البقرة (الفلق بعد الناس…)</option><option value="asc">تصاعدي — من الفاتحة (البقرة بعد الفاتحة…)</option></select></div>
     <div style="background:#e3f3e8;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#1d6b3a">
       السورة وآية البداية معبّأتان تلقائياً من آخر نقطة لكل طالب. اكتب فقط آية <strong>"إلى"</strong> لمن حفظ أو راجع، ثم اضغط <strong>حفظ</strong>. يمكنك تسجيل الطلاب على دفعات أثناء الحلقة؛ تبقى الشاشة مفتوحة ويُنزَل من سُجّل له لأسفل القائمة.
     </div>
@@ -3314,7 +3314,7 @@ async function saveBulkHifz() {
 }
 // ===================== التسجيل السريع للحلقة (حفظ + مراجعة لكل الطلاب في شاشة واحدة) =====================
 let _qk = { students: [], last: {} };
-function qkDir() { try { return localStorage.getItem('qk_dir') || 'asc'; } catch(e) { return 'asc'; } }
+function qkDir() { try { return localStorage.getItem('qk_dir') || 'desc'; } catch(e) { return 'desc'; } }
 function qkNext(surahName, ayahTo, dir) {
   const s = SURAHS.find(x => x.name === surahName);
   if (!s) return null;
@@ -3371,7 +3371,8 @@ function quickRender() {
   const optsTo = '<option value="">↔ إن انتهى في سورة أخرى، اخترها هنا</option>' + SURAHS.map(s => `<option value="${s.name}">إلى سورة ${s.name}</option>`).join('');
   const block = (kind, sid, label, color) => {
     const last = _qk.last[kind][sid];
-    const nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
+    let nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
+    if (!last && kind === 'hifz') nx = dir === 'desc' ? { surah: 'الناس', ayah: 1 } : { surah: 'الفاتحة', ayah: 1 };
     const lastTxt = last ? `آخر نقطة: ${last.surah_to} ${last.ayah_to}` : 'لا يوجد تسجيل سابق';
     return `<div class="qk-blk" style="border-color:${color}">
       <div class="qk-lbl" style="color:${color}">${label} <small id="qk-last-${kind}-${sid}">${lastTxt}</small>
