@@ -3368,7 +3368,7 @@ function quickRender() {
   if (!_qk.students.length) { box.innerHTML = '<div style="color:#999;padding:20px;text-align:center">لا يوجد طلاب في هذه الحلقة</div>'; return; }
   const dir = v('qk-dir') || 'asc';
   const opts = '<option value="">—</option>' + SURAHS.map(s => `<option value="${s.name}">${s.n}. ${s.name}</option>`).join('');
-  const optsTo = '<option value="">↔ إلى نفس السورة</option>' + SURAHS.map(s => `<option value="${s.name}">إلى سورة ${s.name}</option>`).join('');
+  const optsTo = '<option value="">↔ إن انتهى في سورة أخرى، اخترها هنا</option>' + SURAHS.map(s => `<option value="${s.name}">إلى سورة ${s.name}</option>`).join('');
   const block = (kind, sid, label, color) => {
     const last = _qk.last[kind][sid];
     const nx = last ? qkNext(last.surah_to, last.ayah_to, dir) : null;
@@ -3381,7 +3381,7 @@ function quickRender() {
         <input type="number" inputmode="numeric" min="1" id="qk-${kind}-f-${sid}" placeholder="من" value="${nx?nx.ayah:''}" oninput="quickCnt('${kind}','${sid}')">
         <input type="number" inputmode="numeric" min="1" id="qk-${kind}-t-${sid}" placeholder="إلى" oninput="quickCnt('${kind}','${sid}')">
         <span class="qk-n" id="qk-${kind}-n-${sid}"></span>
-        <select id="qk-${kind}-ts-${sid}" class="qk-ts" onchange="quickCnt('${kind}','${sid}')" title="اختر سورة النهاية فقط إن عبر المقطع سورتين">${optsTo}</select>
+        <select id="qk-${kind}-ts-${sid}" class="qk-ts" onchange="quickCnt('${kind}','${sid}')" title="اتركها كما هي إن كان المقطع داخل سورة واحدة. وإن انتهى في سورة أخرى فاخترها، وستكون خانة (إلى) هي آية النهاية فيها">${optsTo}</select>
       </div></div>`;
   };
   box.innerHTML = _qk.students.map(s => `<div class="qk-card" id="qk-card-${s.id}" oninput="quickMark()" onchange="quickMark()">
