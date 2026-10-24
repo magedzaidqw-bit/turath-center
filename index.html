@@ -5190,7 +5190,7 @@ async function loadTeacherHome() {
 // رسالة دعوة أولياء الأمور لتثبيت التطبيق — تُضاف لتقارير الأسبوع الأول من كل شهر (الأيام 1–7) لمدة سنة ثم تتوقف تلقائيًا
 const APP_INVITE_UNTIL = new Date('2027-11-01T00:00:00+03:00');
 const APP_WEB_URL = 'https://magedzaidqw-bit.github.io/turath-center/';
-const APP_PLAY_URL = ''; // ضع رابط التطبيق في Google Play هنا ليظهر في الرسالة
+const APP_PLAY_URL = 'https://play.google.com/store/apps/details?id=io.github.magedzaidqw_bit.twa';
 function appInviteText() {
   const now = new Date();
   if (now >= APP_INVITE_UNTIL || now.getDate() > 7) return '';
