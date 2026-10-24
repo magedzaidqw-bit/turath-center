@@ -5187,6 +5187,29 @@ async function loadTeacherHome() {
   }, 200);
 }
 
+// رسالة دعوة أولياء الأمور لتثبيت التطبيق — تُضاف لتقارير الأسبوع الأول فقط (حتى نهاية الفترة)
+const APP_INVITE_UNTIL = new Date('2026-11-01T00:00:00+03:00');
+const APP_WEB_URL = 'https://magedzaidqw-bit.github.io/turath-center/';
+const APP_PLAY_URL = ''; // ضع رابط التطبيق في Google Play هنا ليظهر في الرسالة
+function appInviteText() {
+  if (new Date() >= APP_INVITE_UNTIL) return '';
+  return `
+
+━━━━━━━━━━━━━━━
+📲 *تابعوا ابنكم من التطبيق*
+يمكنكم الآن متابعة حضور ابنكم وحفظه وسلوكه من تطبيق المركز.
+
+🤖 *أندرويد:*
+${APP_PLAY_URL ? APP_PLAY_URL : `افتحوا الرابط في Chrome ثم ⋮ ← تثبيت التطبيق:\n${APP_WEB_URL}`}
+
+🍎 *آيفون:*
+افتحوا الرابط في Safari ثم زر المشاركة ← إضافة إلى الشاشة الرئيسية:
+${APP_WEB_URL}
+
+🔑 *طريقة الدخول:*
+اختاروا "ولي أمر" ثم اكتبوا رقم جوالكم المسجّل لدينا، وكلمة المرور هي رقم الجوال نفسه.`;
+}
+
 async function sendWeeklyReportWA() {
   if (!confirm('سيتم فتح واتساب لكل ولي أمر لديه رقم مسجل. هل تريد المتابعة؟')) return;
 
@@ -5244,7 +5267,7 @@ ${memoSummary}
 🌟 *السلوك:* ${behAvg}/5
 ━━━━━━━━━━━━━━━
 
-بارك الله في ابنكم وجعله من حفاظ كتاب الله 🤲`;
+بارك الله في ابنكم وجعله من حفاظ كتاب الله 🤲${appInviteText()}`;
 
     const url = `https://wa.me/965${s.parent_phone}?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
@@ -6661,7 +6684,7 @@ function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoV
   const masteryText = {'5.0':'ممتاز','4.0':'جيد','3.0':'جيد','2.0':'يحتاج مراجعة','1.0':'ضعيف'}[memoMastery] || (parseFloat(memoMastery)>=4?'ممتاز':parseFloat(memoMastery)>=3?'جيد':'يحتاج متابعة');
   const attRate = present+absent>0 ? Math.round(present/(present+absent)*100) : 0;
 
-  const msg = `السلام عليكم ورحمة الله 🌙\n\nولي أمر الطالب / ${name}\n\n📨 التقرير الأسبوعي\n(${fmtAr(startDate)} — ${fmtAr(endDate)})\n\n✅ الحضور: ${present} يوم\n❌ الغياب: ${absent} يوم${excused>0?'\n🟡 بعذر: '+excused+' يوم':''}\n📊 نسبة الحضور: ${attRate}%\n\n📖 الحفظ: ${memoSessions} جلسة (${memoVerses} آية)\n⭐ مستوى الإتقان: ${masteryText}\n🌟 السلوك: ${behAvg}/5\n\nبارك الله فيكم 🌿\nمركز التراث لتحفيظ القرآن الكريم`;
+  const msg = `السلام عليكم ورحمة الله 🌙\n\nولي أمر الطالب / ${name}\n\n📨 التقرير الأسبوعي\n(${fmtAr(startDate)} — ${fmtAr(endDate)})\n\n✅ الحضور: ${present} يوم\n❌ الغياب: ${absent} يوم${excused>0?'\n🟡 بعذر: '+excused+' يوم':''}\n📊 نسبة الحضور: ${attRate}%\n\n📖 الحفظ: ${memoSessions} جلسة (${memoVerses} آية)\n⭐ مستوى الإتقان: ${masteryText}\n🌟 السلوك: ${behAvg}/5\n\nبارك الله فيكم 🌿\nمركز التراث لتحفيظ القرآن الكريم${appInviteText()}`;
 
   const cleanPhone = phone.replace(/\D/g, '');
   const waPhone = cleanPhone.startsWith('0') ? '965' + cleanPhone.slice(1) : cleanPhone;
