@@ -7194,6 +7194,18 @@ function showReportModal(r) {
   });
   window.addEventListener('appinstalled', function(){ document.getElementById('install-banner').style.display = 'none'; });
   var ua = navigator.userAgent || '';
+  // أندرويد: التطبيق منشور على جوجل بلاي، فنوجّه المستخدم إليه بدل التثبيت من المتصفح
+  if (/Android/i.test(ua) && !standalone()) {
+    var PLAY = 'https://play.google.com/store/apps/details?id=io.github.magedzaidqw_bit.twa';
+    document.getElementById('install-text').textContent = 'حمّله من متجر جوجل بلاي';
+    var ib = document.getElementById('install-btn');
+    ib.textContent = 'تحميل'; ib.style.display = 'inline-block';
+    ib.onclick = function(){ window.open(PLAY, '_blank'); };
+    window.doInstall = function(){ window.open(PLAY, '_blank'); };
+    window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); });
+    show();
+    return;
+  }
   var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (isIOS && !standalone()) {
     document.getElementById('install-text').innerHTML = 'اضغط زر المشاركة <span style="font-size:15px">⎙</span> في المتصفح، ثم اختر <strong>«إضافة إلى الشاشة الرئيسية»</strong>';
