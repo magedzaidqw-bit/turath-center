@@ -677,6 +677,7 @@ tbody tr:hover { background:#fbfaf6; }
       <div id="turath-header-actions" class="turath-header-actions">
         <button class="lbtn" onclick="openM('m-change-pass')">🔑 كلمة المرور</button>
         <button class="lbtn" id="biometric-remove-btn" onclick="removeBiometric()" style="display:none" title="حذف البصمة">👆✕</button>
+        <button class="lbtn" id="delete-account-btn" onclick="openM('m-delete-account')" style="display:none">🗑️ حذف حسابي</button>
         <button class="lbtn" id="logoutbtn">خروج</button>
       </div>
       <!-- زر القائمة على الجوال -->
@@ -1054,6 +1055,7 @@ function initApp() {
   document.getElementById('uname').textContent = CP.full_name;
   const rl = { admin:'مدير', supervisor:'مشرف', teacher:'محفظ', parent:'ولي أمر' };
   document.getElementById('urole').textContent = rl[CP.role] || CP.role;
+  { const _d = document.getElementById('delete-account-btn'); if (_d) _d.style.display = (CP.role === 'admin') ? 'none' : ''; }
   buildNav();
   buildPages();
   goFirstPage();
@@ -1801,6 +1803,14 @@ function buildModals() {
     <div class="fg"><label>كلمة المرور الجديدة</label><input type="password" id="new-pass" placeholder="أدخل كلمة مرور جديدة"></div>
     <div class="fg"><label>تأكيد كلمة المرور</label><input type="password" id="new-pass2" placeholder="أعد كتابة كلمة المرور"></div>
     <button class="btn-pri" onclick="changePassword()">حفظ كلمة المرور</button>
+  </div></div></div>
+
+  <div class="mo" id="m-delete-account"><div class="modal"><div class="mh"><h3>🗑️ حذف الحساب</h3><button class="mc" onclick="closeM('m-delete-account')">✕</button></div>
+  <div class="mb">
+    <div id="del-alert"></div>
+    <p style="line-height:1.9;font-size:14px;margin-bottom:10px">سيتم حذف حسابك وبياناتك الشخصية نهائياً ولا يمكن التراجع عن ذلك، ولن تتمكن من الدخول بهذا الحساب بعد الآن.<br><b>اكتب كلمة «حذف» للتأكيد</b></p>
+    <div class="fg"><input type="text" id="del-confirm" placeholder="حذف" autocomplete="off"></div>
+    <button class="btn-pri" id="del-btn" style="background:#b3261e" onclick="deleteMyAccount()">حذف حسابي نهائياً</button>
   </div></div></div>
 
   <div class="mo" id="m-points"><div class="modal"><div class="mh"><h3>منح النقاط</h3><button class="mc" onclick="closeM('m-points')">✕</button></div>
@@ -4688,6 +4698,21 @@ async function addPts(sid,pts,reason) {
 }
 
 // ===================== CHANGE PASSWORD =====================
+async function deleteMyAccount() {
+  if (v('del-confirm').trim() !== 'حذف') { showAlert('del-alert','اكتب كلمة «حذف» للتأكيد','err'); return; }
+  const btn = document.getElementById('del-btn'); btn.disabled = true;
+  try {
+    const { data, error } = await sb.functions.invoke('delete-my-account', { body: { confirm: 'حذف' } });
+    if (error || (data && data.error)) {
+      let msg = (data && data.error) || (error && error.message) || 'خطأ غير معروف';
+      try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch(_) {}
+      throw new Error(msg);
+    }
+    showAlert('del-alert','✅ تم حذف حسابك','ok');
+    try { await sb.auth.signOut(); } catch(_) {}
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) { btn.disabled = false; showAlert('del-alert','تعذّر الحذف: ' + (e.message || e),'err'); }
+}
 async function changePassword() {
   const p1 = v('new-pass'), p2 = v('new-pass2');
   if (!p1) { showAlert('pass-alert','أدخل كلمة المرور الجديدة','err'); return; }
