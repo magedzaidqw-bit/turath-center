@@ -4390,6 +4390,12 @@ async function fetchAllRows(makeQuery) {
   }
   return out;
 }
+// تنسيق رقم واتساب: يضيف مفتاح الكويت 965 للرقم المحلي (8 أرقام) ويحذف الصفر/00 من البداية
+function waNum(phone) {
+  let n = String(phone || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (n.length === 8) n = '965' + n;
+  return n;
+}
 function waTeacher(id) {
   const m = (window._waMsgs || {})[id]; if (!m) return;
   window.open('https://wa.me/' + (m.phone || '') + '?text=' + encodeURIComponent(m.text), '_blank');
@@ -5368,7 +5374,7 @@ async function sendAllTop3WA() {
 
     const msg = `🏆 مبروك!\n\nالسلام عليكم ورحمة الله ${stu?.parent_name ? '/ '+stu.parent_name : ''}،\n\nيسعدنا إخباركم بأن ابنكم\n*${stu?.full_name || t.student.full_name}*\nقد حصل على *${ranks[i]}*\nفي تقييم حلقته بمركز التراث لتحفيظ القرآن الكريم 📖\n\nالمجموع: ${t.total.toFixed(1)}/15\n📖 الحفظ: ${t.memoScore.toFixed(1)} | 📅 الحضور: ${t.present}/${t.totalAtt} | 🌟 السلوك: ${t.behScore.toFixed(1)}\n\nبارك الله فيه وجعله من حفاظ كتاب الله 🌟`;
 
-    window.open(`https://wa.me/965${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/${waNum(phone)}?text=${encodeURIComponent(msg)}`, '_blank');
     sent++;
     await new Promise(r => setTimeout(r, 800));
   }
@@ -5837,7 +5843,7 @@ ${memoSummary}
 
 بارك الله في ابنكم وجعله من حفاظ كتاب الله 🤲${appInviteText()}`;
 
-    const url = `https://wa.me/965${s.parent_phone}?text=${encodeURIComponent(msg)}`;
+    const url = `https://wa.me/${waNum(s.parent_phone)}?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
     sent++;
     sentByCircle[s.circle_id] = (sentByCircle[s.circle_id]||0) + 1;
@@ -6399,7 +6405,7 @@ async function downloadDonorPDF(donorName) {
 
 function sendDonorReportWA(name, phone) {
   const msg = `السلام عليكم ورحمة الله وبركاته 🌿\n\nالمتبرع الكريم / ${name}\n\nنُقدّم لكم تقرير الحلقات التي تتفضلون بكفالتها في\nمركز التراث لتحفيظ القرآن الكريم — فرع الجهراء\n\nجزاكم الله خيراً على دعمكم لكتاب الله 🌟\nرسالتنا تبدأ بالحرف وتمتد للأجيال`;
-  window.open(`https://wa.me/965${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  window.open(`https://wa.me/${waNum(phone)}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function printDonorReport(donorName) {
@@ -7317,7 +7323,7 @@ function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoV
   const msg = `السلام عليكم ورحمة الله 🌙\n\nولي أمر الطالب / ${name}\n\n📨 التقرير الأسبوعي\n(${fmtAr(startDate)} — ${fmtAr(endDate)})\n\n✅ الحضور: ${present} يوم\n❌ الغياب: ${absent} يوم${excused>0?'\n🟡 بعذر: '+excused+' يوم':''}\n📊 نسبة الحضور: ${attRate}%\n\n📖 الحفظ: ${memoSessions} جلسة (${memoVerses} آية)\n⭐ مستوى الإتقان: ${masteryText}\n🌟 السلوك: ${behAvg}/5\n\nبارك الله فيكم 🌿\nمركز التراث لتحفيظ القرآن الكريم${appInviteText()}`;
 
   const cleanPhone = phone.replace(/\D/g, '');
-  const waPhone = cleanPhone.startsWith('0') ? '965' + cleanPhone.slice(1) : cleanPhone;
+  const waPhone = waNum(cleanPhone);
   window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
 
   // نسجّل بصمت أن المحفظ أرسل تقرير هذا الطالب تحديدًا هذا الأسبوع، ليظهر تراكميًا عند المشرف
@@ -7479,7 +7485,7 @@ function sendStudentWA(phone, name, present, absent, memoVerses, memoFrom, memoT
   const msg = `السلام عليكم ورحمة الله 🌙\n\nولي أمر الطالب / ${name}\n\n📋 تقرير شهر ${monthName} ${year}:\n\n✅ الحضور: ${present} يوم\n❌ الغياب: ${absent} يوم\n📊 نسبة الحضور: ${attRate}%\n📖 مجموع الحفظ: ${memoVerses} آية (${rangeText})\n🔄 جلسات المراجعة: ${reviewSessions}\n\nبارك الله فيكم 🌿\nمركز التراث لتحفيظ القرآن الكريم`;
 
   const cleanPhone = phone.replace(/\D/g, '');
-  const waPhone = cleanPhone.startsWith('0') ? '965' + cleanPhone.slice(1) : cleanPhone;
+  const waPhone = waNum(cleanPhone);
   window.open('https://wa.me/' + waPhone + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
