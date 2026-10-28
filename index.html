@@ -752,7 +752,6 @@ async function doLogin() {
   if (authMode === 'admin') {
     email = document.getElementById('lemail').value.trim();
     pass = document.getElementById('lpass').value;
-    window._adminPassTemp = pass; // مؤقت لتسجيل البصمة
   } else if (authMode === 'teacher') {
     const civilId = document.getElementById('lcivilid').value.trim();
     pass = document.getElementById('lpass2').value;
@@ -825,8 +824,27 @@ function hasSavedBiometric() {
 }
 
 function getSavedBiometric() {
-  try { return JSON.parse(localStorage.getItem(BIOMETRIC_KEY)); } catch(e) { return null; }
+  try {
+    const v = JSON.parse(localStorage.getItem(BIOMETRIC_KEY));
+    // نسخ قديمة كانت تحفظ كلمة المرور نصاً: نحذفها فوراً ويُعاد التفعيل
+    if (v && v.pass) { localStorage.removeItem(BIOMETRIC_KEY); return null; }
+    return v;
+  } catch(e) { return null; }
 }
+
+// نحدّث رمز التجديد المحفوظ كلما جدّده Supabase حتى تبقى البصمة صالحة
+function syncBiometricToken(session) {
+  try {
+    const v = getSavedBiometric();
+    if (v && session && session.refresh_token) {
+      v.rt = session.refresh_token;
+      localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(v));
+    }
+  } catch(e) {}
+}
+sb.auth.onAuthStateChange((ev, session) => {
+  if (ev === 'SIGNED_IN' || ev === 'TOKEN_REFRESHED') syncBiometricToken(session);
+});
 
 // عرض زر البصمة إذا كانت محفوظة
 async function checkBiometricOnLoad() {
@@ -887,13 +905,16 @@ async function registerBiometric() {
       timeout: 60000
     }});
 
-    // حفظ بيانات البصمة
+    // نحفظ رمز تجديد الجلسة بدل كلمة المرور
+    const { data: sess } = await sb.auth.getSession();
+    const rt = sess && sess.session && sess.session.refresh_token;
+    if (!rt) throw new Error('تعذر قراءة الجلسة، أعد الدخول ثم حاول مجدداً');
     const saved = {
       credId: Array.from(new Uint8Array(credential.rawId)),
       email: CU.email,
       name: CP.full_name,
       role: CP.role,
-      pass: window._adminPassTemp || CU.email.split('@')[0]
+      rt
     };
     localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(saved));
 
@@ -913,7 +934,8 @@ async function registerBiometric() {
 async function doBiometricLogin() {
   const saved = getSavedBiometric();
   if (!saved) return;
-  const btn = document.getElementById('biometric-login-btn');
+  const btn = document.getElementById(authMode === 'admin' ? 'biometric-admin-login-btn' : 'biometric-login-btn') || document.createElement('button');
+  const btnHtml = btn.innerHTML;
   btn.disabled = true; btn.innerHTML = '<span style="font-size:22px">⏳</span> جارٍ التحقق...';
   try {
     const challenge = new Uint8Array(32);
@@ -929,17 +951,14 @@ async function doBiometricLogin() {
     }});
 
     // البصمة صحيحة — الآن نسجل الدخول تلقائياً
-    const savedPass = saved.pass || saved.email.split('@')[0];
-    console.log('Biometric login for role:', saved.role, 'email:', saved.email);
-    const { data, error } = await sb.auth.signInWithPassword({ 
-      email: saved.email, 
-      password: savedPass
-    });
-    if (error) {
-      showAlert('auth-alert', 'تعذر الدخول — ربما تغيرت كلمة المرور. ادخل يدوياً مرة واحدة.', 'err');
+    const { data, error } = await sb.auth.refreshSession({ refresh_token: saved.rt });
+    if (error || !data || !data.user) {
+      localStorage.removeItem(BIOMETRIC_KEY);
+      showAlert('auth-alert', 'انتهت صلاحية البصمة. ادخل يدوياً مرة واحدة ثم فعّلها من جديد.', 'err');
       btn.disabled = false; btn.innerHTML = '<span style="font-size:22px">👆</span> دخول بالبصمة';
       return;
     }
+    syncBiometricToken(data.session);
     CU = data.user;
     await loadProfile();
   } catch(e) {
