@@ -4520,9 +4520,9 @@ async function loadActivity() {
       const level = !circ.length ? 'none' : workdays.length === 0 ? 'off' : (W <= 0 ? 'leave' : done === 2 ? 'ok' : done === 1 ? 'mid' : 'bad');
       return { t, circ, a, level, W, students: stuCount[t.id] || 0, newS: newStu[t.id] || 0, sent: sentByTeacher[t.id] || 0, elig: eligibleByTeacher[t.id] || 0, mr: mrBy[t.id] || null, mrAt: mrAt[t.id] || null };
     }).filter(r => r.circ.length);
-    const order = { bad:0, mid:1, ok:2, none:3, leave:3, off:3 };
+    const order = { ok:0, mid:1, bad:2, none:3, leave:3, off:3 };
     const mrRank = r => r.mr === 'submitted' ? 0 : r.mr ? 1 : 2;
-    rows.sort((x, y) => order[x.level] - order[y.level] || mrRank(x) - mrRank(y) || (x.t.full_name || '').localeCompare(y.t.full_name || '', 'ar'));
+    rows.sort((x, y) => order[x.level] - order[y.level] || mrRank(x) - mrRank(y) || (y.a.cur - x.a.cur) || (x.t.full_name || '').localeCompare(y.t.full_name || '', 'ar'));
 
     // المشرفون
     const supRows = sups.map(s => {
