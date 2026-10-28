@@ -4660,7 +4660,7 @@ async function loadActivity() {
     }
 
     html += `<div class="card"><div class="ch"><h3>👨‍🏫 المحفظون (${rows.length})</h3></div><div class="cb"><div class="tw"><table>
-      <thead><tr><th>المحفظ</th><th>الحلقة</th><th>الطلاب</th><th>الحضور والغياب</th><th>الحفظ</th><th>المراجعة</th><th>السلوك</th><th>التقرير الشهري — ${monthName}</th><th>آخر نشاط</th><th>الحالة</th><th>الاتجاه</th></tr></thead><tbody>`;
+      <thead><tr><th>المحفظ</th><th>الحلقة</th><th>الطلاب</th><th>الحضور والغياب</th><th>الحفظ</th><th>المراجعة</th><th>السلوك</th><th>التقرير الشهري — ${monthName}</th><th>آخر نشاط</th><th>الحالة</th><th title="مقارنة نشاطه بالفترة السابقة">مقارنة بالسابق</th></tr></thead><tbody>`;
     rows.forEach(r => {
       html += `<tr>
         <td><strong>${escapeHtml(r.t.full_name)}</strong>${waBtnFor(r)}</td>
@@ -4675,11 +4675,11 @@ async function loadActivity() {
           if (!prevFrom || r.level === 'leave' || r.level === 'off' || r.level === 'none') return '<span style="color:var(--mid)">—</span>';
           const c = r.a.cur, p = r.a.prv;
           if (!p && !c) return '<span style="color:var(--mid)">—</span>';
-          if (!p) return '<span style="color:#1d6b3a;font-weight:700">▲ جديد</span>';
+          if (!p) return '<span style="color:#1d6b3a;font-weight:700">▲ بدأ</span>';
           if (!c) return '<span style="color:#a3262b;font-weight:700">▼ توقف</span>';
           const ch = Math.round((c - p) / p * 100);
-          if (Math.abs(ch) < 10) return '<span style="color:var(--mid)">◄ ثابت</span>';
-          return ch > 0 ? `<span style="color:#1d6b3a;font-weight:700">▲ +${ch}%</span>` : `<span style="color:#a3262b;font-weight:700">▼ ${ch}%</span>`;
+          if (Math.abs(ch) < 10) return '<span style="color:var(--mid)">◄ مثل السابق</span>';
+          return ch > 0 ? '<span style="color:#1d6b3a;font-weight:700">▲ أفضل</span>' : '<span style="color:#a3262b;font-weight:700">▼ أقل</span>';
         })()}</td></tr>`;
     });
     html += `</tbody></table></div></div></div>`;
