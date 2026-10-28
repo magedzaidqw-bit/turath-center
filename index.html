@@ -4216,17 +4216,41 @@ function printStandalone(html) {
 
 // ===================== المحفظ المثالي =====================
 // الدرجة = تقييم المشرف (60 حتى أكتوبر 2026، ثم 80) + درجات البرنامج للتفاعل (20)
+async function addCenterHoliday() {
+  const f = document.getElementById('hd-from')?.value, e = document.getElementById('hd-to')?.value || f, r = (document.getElementById('hd-reason')?.value || '').trim();
+  if (!f) { alert('اختر تاريخ العطلة'); return; }
+  if (e < f) { alert('تاريخ النهاية قبل البداية'); return; }
+  const { error } = await sb.from('center_holidays').insert({ from_date: f, to_date: e, reason: r || null });
+  if (error) { alert('تعذر الحفظ: ' + error.message); return; }
+  loadIdeal();
+}
+async function delCenterHoliday(id) {
+  if (!confirm('حذف هذه العطلة؟')) return;
+  const { error } = await sb.from('center_holidays').delete().eq('id', id);
+  if (error) { alert('تعذر الحذف: ' + error.message); return; }
+  loadIdeal();
+}
 async function loadIdeal() {
   const root = document.getElementById('ideal-content'); if (!root) return;
   root.innerHTML = emptyDiv('⏳', 'جارٍ حساب المحفظ المثالي...');
   try {
     const isSup = CP.role === 'supervisor';
     const now = new Date(); const todayS = ymdLocal(now);
-    const from = new Date(now); from.setDate(from.getDate() - 29); const fromS = ymdLocal(from);
+    // الفترة: الشهر الحالي حتى اليوم، وفي أول 7 أيام من الشهر يُحسب الشهر السابق كاملًا
+    let pStart, pEnd;
+    if (now.getDate() <= 7) { pStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); pEnd = new Date(now.getFullYear(), now.getMonth(), 0); }
+    else { pStart = new Date(now.getFullYear(), now.getMonth(), 1); pEnd = now; }
+    const fromS = ymdLocal(pStart), endS = ymdLocal(pEnd) < todayS ? ymdLocal(pEnd) : todayS;
     const evFrom = new Date(now); evFrom.setDate(evFrom.getDate() - 62);
     const sendFrom = new Date(now); sendFrom.setDate(sendFrom.getDate() - 36);
-    const wd = []; for (const d = new Date(fromS + 'T00:00:00'); ymdLocal(d) <= todayS; d.setDate(d.getDate() + 1)) if (d.getDay() <= 3) wd.push(ymdLocal(d));
-    const W = wd.length || 1;
+    const inR = d => d >= fromS && d <= endS;
+    const [holis, leaves] = await Promise.all([
+      fetchAllRows(() => sb.from('center_holidays').select('id,from_date,to_date,reason')).catch(() => []),
+      fetchAllRows(() => sb.from('teacher_leaves').select('teacher_id,from_date,to_date')).catch(() => [])
+    ]);
+    const inRange = (d, a, b) => d >= String(a).slice(0, 10) && d <= String(b).slice(0, 10);
+    const wd = []; for (const d = new Date(fromS + 'T00:00:00'); ymdLocal(d) <= endS; d.setDate(d.getDate() + 1)) { const k = ymdLocal(d); if (d.getDay() <= 3 && !holis.some(h => inRange(k, h.from_date, h.to_date))) wd.push(k); }
+    const validDays = t => new Set(wd.filter(k => !leaves.some(l => l.teacher_id === t && inRange(k, l.from_date, l.to_date))));
     const [circles, students, att, memo, beh, rev, sends, mrs, evs, sc, profs] = await Promise.all([
       fetchAllRows(() => sb.from('circles').select('id,name,teacher_id,teacher_name,is_official')),
       fetchAllRows(() => sb.from('students').select('id,circle_id')),
@@ -4252,13 +4276,13 @@ async function loadIdeal() {
     const tCircles = {}; offCircles.forEach(c => (tCircles[c.teacher_id] = tCircles[c.teacher_id] || []).push(c));
 
     // أيام التسجيل المميزة لكل محفظ
-    const daysOf = (rows, key) => { const m = {}; rows.forEach(r => { if (!stuCircle[r.student_id]) return; (m[r[key]] = m[r[key]] || new Set()).add(r.date); }); return m; };
+    const daysOf = (rows, key) => { const m = {}; rows.forEach(r => { if (!stuCircle[r.student_id] || !inR(r.date)) return; (m[r[key]] = m[r[key]] || new Set()).add(r.date); }); return m; };
     const attDays = daysOf(att, 'created_by'), memoDays = daysOf(memo, 'recorded_by'), behDays = daysOf(beh, 'recorded_by'), revDays = daysOf(rev, 'recorded_by');
 
     // التقرير الأسبوعي: نسبة من أُرسل لهم إلى من حضر، لكل أسبوع منتهٍ (أحد–أربعاء)
     const weekKeys = []; { const d = new Date(fromS + 'T00:00:00'); while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
-      for (; ; d.setDate(d.getDate() + 7)) { const end = new Date(d); end.setDate(end.getDate() + 3); if (ymdLocal(end) > todayS) break; weekKeys.push(ymdLocal(d)); } }
-    const presentWk = {}; att.forEach(r => { if (r.status !== 'present' || !stuCircle[r.student_id]) return; const dd = new Date(r.date + 'T00:00:00'); dd.setDate(dd.getDate() - dd.getDay()); const k = ymdLocal(dd), t = circleOf[stuCircle[r.student_id]].teacher_id; ((presentWk[t] = presentWk[t] || {})[k] = presentWk[t][k] || new Set()).add(r.student_id); });
+      for (; ; d.setDate(d.getDate() + 7)) { const end = new Date(d); end.setDate(end.getDate() + 3); if (ymdLocal(end) > endS) break; weekKeys.push(ymdLocal(d)); } }
+    const presentWk = {}; att.forEach(r => { if (r.status !== 'present' || !stuCircle[r.student_id] || !inR(r.date)) return; const dd = new Date(r.date + 'T00:00:00'); dd.setDate(dd.getDate() - dd.getDay()); const k = ymdLocal(dd), t = circleOf[stuCircle[r.student_id]].teacher_id; ((presentWk[t] = presentWk[t] || {})[k] = presentWk[t][k] || new Set()).add(r.student_id); });
     const sentAcc = {}; sends.forEach(r => { const c = circleOf[r.circle_id]; if (!c) return; const dt = new Date(r.week_start + 'T00:00:00'); if (dt.getDay() === 6) dt.setDate(dt.getDate() + 1); const k = ymdLocal(dt); const o = (((sentAcc[c.teacher_id] = sentAcc[c.teacher_id] || {})[k] = sentAcc[c.teacher_id][k] || {})[r.circle_id] = sentAcc[c.teacher_id][k][r.circle_id] || { ids: new Set(), legacy: 0 }); if (r.student_id) o.ids.add(r.student_id); else o.legacy += (r.sent_count || 0); });
     const sentN = (t, k) => { let tot = 0; const a = ((sentAcc[t] || {})[k]) || {}; Object.keys(a).forEach(cid => { tot += Math.min(circleN[cid] || Infinity, a[cid].ids.size + a[cid].legacy); }); return tot; };
 
@@ -4272,7 +4296,8 @@ async function loadIdeal() {
 
     const res = {};
     teacherIds.forEach(t => {
-      const r1 = x => Math.min(1, ((x[t] || new Set()).size) / W);
+      const vd = validDays(t), W = vd.size;
+      const r1 = x => W ? [...(x[t] || [])].filter(k => vd.has(k)).length / W : 0;
       const attR = r1(attDays), memoR = r1(memoDays), brR = (r1(behDays) + r1(revDays)) / 2;
       const ratios = []; weekKeys.forEach(k => { const D = ((presentWk[t] || {})[k] || new Set()).size; if (D > 0) ratios.push(Math.min(1, sentN(t, k) / D)); });
       const wkR = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
@@ -4280,7 +4305,7 @@ async function loadIdeal() {
       const eng = 6 * attR + 6 * memoR + 2 * brR + 4 * wkR + 2 * mR;
       const e = evBy[t]; const pct = e ? Math.min(1, (e.total_score || 0) / evMax(e.eval_date)) : null;
       const evMx = e ? evMax(e.eval_date) : evMax(todayS); const evPts = e ? Math.min(evMx, e.total_score || 0) : 0;
-      res[t] = { id: t, evMx, mx: evMx + 20, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, ratio: (eng + evPts) / (evMx + 20), attR, memoR, wkR, mR, brR };
+      res[t] = { W, id: t, evMx, mx: evMx + 20, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, ratio: (eng + evPts) / (evMx + 20), attR, memoR, wkR, mR, brR };
     });
     const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.ratio - a.ratio || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
 
@@ -4312,15 +4337,23 @@ async function loadIdeal() {
       </div></div>`;
     };
 
-    let html = '';
+    let html = `<div style="font-size:12px;color:var(--mid);margin-bottom:10px">📅 فترة الحساب: من ${fromS} إلى ${endS} (أيام الدوام الأحد–الأربعاء، دون العطل وإجازات المحفظين)</div>`;
     const anyEval = Object.values(res).some(x => x.hasEval);
     if (!anyEval) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb" style="font-size:13px">ℹ️ لا توجد تقييمات للمشرفين خلال آخر شهرين، لذلك يظهر الترتيب الآن بحسب درجات التفاعل مع البرنامج فقط (من 20). يكتمل الترتيب تلقائيًا بعد أن يقيّم المشرفون المحفظين (يُفتح التقييم يوم 28).</div></div>`;
     if (!isSup) html += section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله', rank(teacherIds));
     supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids)); });
     if (!supList.length && isSup) html += emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.');
+    if (!isSup) html += `<div class="card"><div class="ch"><h3>🏖️ عطل المركز (تُستثنى من الحساب)</h3></div><div class="cb">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+        <div><div style="font-size:11px">من</div><input type="date" id="hd-from" style="padding:8px;border-radius:10px;width:100%;box-sizing:border-box"></div>
+        <div><div style="font-size:11px">إلى</div><input type="date" id="hd-to" style="padding:8px;border-radius:10px;width:100%;box-sizing:border-box"></div>
+        <div style="flex:1;min-width:140px"><div style="font-size:11px">السبب</div><input type="text" id="hd-reason" style="padding:8px;border-radius:10px;width:100%;box-sizing:border-box" placeholder="مثال: إجازة العيد"></div>
+        <button class="btn btn-gold" onclick="addCenterHoliday()">إضافة</button></div>
+      ${holis.length ? holis.sort((a, b) => String(b.from_date).localeCompare(String(a.from_date))).map(h => `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--gray2);font-size:13px"><span>${h.from_date} ← ${h.to_date} ${h.reason ? '· ' + escapeHtml(h.reason) : ''}</span><button class="btn" style="padding:2px 10px" onclick="delCenterHoliday('${h.id}')">حذف</button></div>`).join('') : '<div style="color:var(--mid);font-size:13px">لا توجد عطل مسجلة.</div>'}
+    </div></div>`;
     html += `<div class="card"><div class="ch"><h3>كيف تُحسب الدرجة؟</h3></div><div class="cb" style="font-size:13px;line-height:2">
       <strong>المجموع = تقييم المشرف + درجات البرنامج للتفاعل (20)</strong><br>تقييم شهر أكتوبر: 60 + 20 = 80 · وابتداءً من نوفمبر 2026: 80 + 20 = 100<br>
-      <strong>التفاعل (آخر 30 يومًا، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط):</strong><br>
+      <strong>التفاعل (الشهر الحالي، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط، دون العطل وإجازات المحفظ):</strong><br>
       • تسجيل الحضور: 6 درجات (حسب نسبة أيام الدوام التي سجّل فيها)<br>
       • تسجيل الحفظ: 6 درجات (بنفس الطريقة)<br>
       • تسجيل السلوك والمراجعة: 2 درجة<br>
