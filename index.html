@@ -4230,6 +4230,80 @@ async function delCenterHoliday(id) {
   if (error) { alert('تعذر الحذف: ' + error.message); return; }
   loadIdeal();
 }
+
+function idealPosterOf(i) { const d = window._idealData; return d && d.posters[i] ? { p: d.posters[i], month: d.monthTxt } : null; }
+function shareIdealWA(i) {
+  const o = idealPosterOf(i); if (!o) return;
+  const medals = ['🥇', '🥈', '🥉'];
+  const msg = `السلام عليكم ورحمة الله وبركاته 🌿\n\n🌟 ${o.p.title}\nعن شهر ${o.month}\n\n` + o.p.names.map((n, k) => `${medals[k]} ${n.name}`).join('\n') + `\n\nنشكرهم على تفاعلهم المتميز مع تطبيق تراث وجودة أدائهم، ونسأل الله أن يبارك في جهودهم ويجعلها في ميزان حسناتهم.\nوالباب مفتوح للجميع للتميز بإذن الله 🌹\n\nإدارة مركز التراث`;
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+function printIdealPoster(i) {
+  const o = idealPosterOf(i); if (!o) return;
+  const T = { p: '#0a1e12', p2: '#1a5230', g: '#c9a153', g2: '#f5e8c0' };
+  const rankTxt = ['المركز الأول', 'المركز الثاني', 'المركز الثالث'], rankNum = ['١', '٢', '٣'];
+  const ringCol = ['#C4964F', '#8a96a3', '#b0703a'];
+  const blockBg = ['linear-gradient(180deg,#e8c15a,#b8860b)', 'linear-gradient(180deg,#dfe4e9,#8a96a3)', 'linear-gradient(180deg,#e0a56c,#8a4f1f)'];
+  const blockH = ['40mm', '29mm', '21mm'];
+  const pattern = "url(\"data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><g fill='none' stroke='${T.g}' stroke-opacity='.28' stroke-width='1'><path d='M22 4l6 12 12 6-12 6-6 12-6-12-12-6 12-6z'/></g></svg>`) + "\")";
+  const card = k => {
+    const n = o.p.names[k]; if (!n) return '<div></div>';
+    const big = k === 0;
+    return `<div class="col"><div class="av ${big ? 'big' : ''}" style="--rc:${ringCol[k]}"><div class="ph"><span>${svgAvatar(big ? 120 : 84, '#b9c4bd')}</span></div><div class="mdl">${svgMedal(k, big ? 44 : 36)}</div></div>
+      <div class="nm ${big ? 'bignm' : ''}">${escapeHtml(n.name)}</div><div class="cr">${escapeHtml(n.circles)}</div>
+      <div class="blk" style="height:${blockH[k]};background:${blockBg[k]}"><div class="num">${rankNum[k]}</div><div class="rk">${rankTxt[k]}</div></div></div>`;
+  };
+  const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(o.p.title)} - ${o.month}</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+@page{size:A4 portrait;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:210mm;height:295mm;max-height:295mm;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Cairo',sans-serif;color:${T.p};overflow:hidden}
+.poster{width:210mm;height:294mm;overflow:hidden;position:relative;background:#fffaf0;padding:5mm}
+.fr{height:100%;border:.8mm solid ${T.g};border-radius:3mm;padding:1.6mm}
+.wrap{height:100%;border:.3mm solid ${T.g};border-radius:2mm;overflow:hidden;display:flex;flex-direction:column;background:#fffaf0}
+.hd{height:54mm;background:linear-gradient(135deg,${T.p} 0%,${T.p2} 100%);background-image:${pattern},linear-gradient(135deg,${T.p} 0%,${T.p2} 100%);color:#fff;text-align:center;padding:7mm 10mm 0}
+.hd .logo{width:23mm;height:23mm;border-radius:50%;background:#fff;border:1mm solid ${T.g};padding:.8mm;object-fit:cover}
+.org{font-family:'Amiri',serif;font-size:22pt;font-weight:700;color:${T.g2};margin-top:2mm;line-height:1.3}
+.sub{font-size:10.5pt;color:rgba(255,255,255,.78);margin-top:.8mm}
+.strip{height:3.5mm;background:repeating-linear-gradient(90deg,${T.g} 0 6mm,${T.p} 6mm 8mm)}
+.body{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:5mm 12mm 0}
+.verse{font-family:'Amiri',serif;font-size:16pt;color:#7a5a1c;line-height:1.7}
+.ttl{font-family:'Amiri',serif;font-size:40pt;font-weight:700;color:${T.p};line-height:1.15}
+.cir{margin-top:2mm;display:inline-block;background:${T.p2};color:${T.g2};padding:1.5mm 10mm;border-radius:50px;font-size:14pt;font-weight:900}
+.per{margin-top:2mm;font-size:12pt;color:#666;font-weight:700}
+.pod{flex:1;min-height:0;width:100%;display:grid;grid-template-columns:1fr 1.18fr 1fr;gap:3mm;align-items:end;padding-top:3mm}
+.col{display:flex;flex-direction:column;align-items:center;min-width:0}
+.av{position:relative;width:34mm;height:34mm;margin-bottom:2mm}
+.av.big{width:45mm;height:45mm}
+.ph{width:100%;height:100%;border-radius:50%;border:1.6mm solid var(--rc);overflow:hidden;background:#f1ebdd;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.4mm #fff,0 0 0 1.9mm var(--rc)}
+.mdl{position:absolute;bottom:-4mm;left:50%;transform:translateX(-50%);line-height:0}
+.nm{font-family:'Amiri',serif;font-weight:700;font-size:15pt;line-height:1.35;margin-top:5mm;padding:0 1mm}
+.nm.bignm{font-size:19pt}
+.cr{font-size:9.5pt;color:#666;margin:.5mm 0 2mm;font-weight:700}
+.blk{width:100%;border-radius:3mm 3mm 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-shadow:0 .4mm .8mm rgba(0,0,0,.35)}
+.blk .num{font-family:'Amiri',serif;font-size:30pt;font-weight:700;line-height:1}
+.blk .rk{font-size:11pt;font-weight:900;margin-top:1mm}
+.msg{width:100%;background:${T.p};color:${T.g2};padding:4mm 12mm 3.5mm;text-align:center}
+.msg .m1{font-family:'Amiri',serif;font-size:19pt;font-weight:700}
+.msg .m2{font-size:10pt;color:rgba(255,255,255,.75);margin-top:1mm}
+.ft{width:100%;display:flex;justify-content:space-between;font-size:10.5pt;color:#fff;background:${T.p2};padding:3mm 14mm 8mm}
+</style></head><body><div class="poster"><div class="fr"><div class="wrap">
+<div class="hd"><img class="logo" src="${printLogoUrl()}" onerror="this.style.display='none'"><div class="org">مركز التراث لتحفيظ القرآن الكريم</div><div class="sub">جمعية إحياء التراث الإسلامي — فرع الجهراء</div></div>
+<div class="strip"></div>
+<div class="body">
+  <div class="verse">﴿ وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ ﴾</div>
+  <div class="ttl">المحفظ المثالي</div>
+  <div class="cir">${escapeHtml(o.p.title.replace('المحفظ المثالي — ', '').replace('المحفظ المثالي في ', ''))}</div>
+  <div class="per">شهر ${o.month}</div>
+  <div class="pod">${card(1)}${card(0)}${card(2)}</div>
+</div>
+<div class="msg"><div class="m1">شكرًا لتفانيكم وبارك الله في جهودكم</div><div class="m2">أداءٌ متميز وتفاعلٌ مع التطبيق — والتميز مفتوح لكل مجتهد</div></div>
+<div class="ft"><span>إدارة مركز التراث</span><span>${arDateNow()}</span></div>
+</div></div></div></body></html>`;
+  printStandalone(html);
+}
 async function loadIdeal() {
   const root = document.getElementById('ideal-content'); if (!root) return;
   root.innerHTML = emptyDiv('⏳', 'جارٍ حساب المحفظ المثالي...');
@@ -4335,9 +4409,13 @@ async function loadIdeal() {
         <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/' + t.evMx + '</small>' : 'لم يُقيَّم'}</div></div>
         <div style="text-align:center;min-width:70px;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:12px;padding:6px 10px"><div style="font-size:10px;color:var(--gd)">المجموع</div><div style="font-weight:900;font-size:18px;color:var(--gd)">${t.total.toFixed(1)}<small>/${t.mx}</small></div></div>
       </div>`;
-    const section = (title, sub, list) => {
+    const posters = []; const monthTxt = (MONTHS_AR[pStart.getMonth() + 1] || '') + ' ' + pStart.getFullYear();
+    window._idealData = { posters, monthTxt };
+    const section = (title, sub, list, posterTitle) => {
       const top = list.slice(0, 3), rest = list.slice(3);
-      return `<div class="card"><div class="ch"><h3>${title}</h3></div><div class="cb">
+      const pi = posters.push({ title: posterTitle, names: top.map(t => ({ name: t.name, circles: t.circles.join('، ') })) }) - 1;
+      const btns = top.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-gold btn-sm" onclick="printIdealPoster(${pi})">🖨️ لوحة المحفظ المثالي</button><button class="btn btn-o btn-sm" onclick="shareIdealWA(${pi})">📱 رسالة للمجموعة</button></div>` : '';
+      return `<div class="card"><div class="ch"><h3>${title}</h3></div><div class="cb">${isSup && false ? '' : btns}
         ${sub ? `<div style="font-size:12px;color:var(--mid);margin-bottom:10px">${sub}</div>` : ''}
         ${top.length ? top.map((t, i) => row(t, i)).join('') : '<div style="color:var(--mid)">لا توجد بيانات كافية.</div>'}
         ${rest.length ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px">عرض بقية المحفظين (${rest.length})</summary><div style="margin-top:8px">${rest.map((t, i) => row(t, i + 3)).join('')}</div></details>` : ''}
@@ -4347,8 +4425,8 @@ async function loadIdeal() {
     let html = `<div style="font-size:12px;color:var(--mid);margin-bottom:10px">📅 فترة الحساب: من ${fromS} إلى ${endS} (أيام الدوام الأحد–الأربعاء، دون العطل وإجازات المحفظين)</div>`;
     const anyEval = Object.values(res).some(x => x.hasEval);
     if (!anyEval) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb" style="font-size:13px">ℹ️ لا توجد تقييمات للمشرفين خلال آخر شهرين، لذلك يظهر الترتيب الآن بحسب درجات التفاعل مع البرنامج فقط (من 20). يكتمل الترتيب تلقائيًا بعد أن يقيّم المشرفون المحفظين (يُفتح التقييم يوم 28).</div></div>`;
-    if (!isSup) html += section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله', rank(teacherIds));
-    supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids)); });
+    if (!isSup) html += section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله', rank(teacherIds), 'المحفظ المثالي في المركز');
+    supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids), 'المحفظ المثالي — إشراف ' + sv.name); });
     if (!supList.length && isSup) html += emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.');
     if (!isSup) html += `<div class="card"><div class="ch"><h3>🏖️ عطل المركز (تُستثنى من الحساب)</h3></div><div class="cb">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
