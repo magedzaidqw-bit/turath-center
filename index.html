@@ -2220,6 +2220,7 @@ async function saveCircle() {
   const name=v('c-name'),teacher=v('c-teacher'),scheduleTime=v('c-schedule'),location=v('c-location');
   if(!name){alert('أدخل اسم الحلقة');return;}
   if(!scheduleTime){alert('اختر وقت الحلقة');return;}
+  if(!teacher && !confirm('لم تختر محفظاً لهذه الحلقة، وستصبح بلا محفظ ولن تظهر في متابعة النشاط. هل تريد المتابعة؟')) return;
   const schedule = scheduleTime; // نحفظ الوقت فقط
   if (editingCircleId) {
     await sb.from('circles').update({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location,is_official:document.getElementById('c-official').checked}).eq('id', editingCircleId);
