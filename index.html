@@ -1283,11 +1283,11 @@ function buildNav() {
       {id:'dashboard',l:'📊 الرئيسية'},{id:'sup-home',l:'🔔 متابعة الحلقات والنشاط'},{id:'circles',l:'🕌 الحلقات'},
       {id:'teachers',l:'👨‍🏫 المحفظون'},{id:'supervisors',l:'🧑‍💼 المشرفون'},{id:'students',l:'🎓 الطلاب'},
       {id:'attendance',l:'📅 الحضور'},{id:'memorization',l:'📖 الحفظ'},{id:'behavior',l:'🌟 السلوك'},
-      {id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'reports-view',l:'📊 التقارير الشهرية'},{id:'top3',l:'🏆 الفرسان'},
+      {id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'reports-view',l:'📊 التقارير الشهرية'},{id:'ideal',l:'🌟 المحفظ المثالي'},{id:'top3',l:'🏆 الفرسان'},
       {id:'parent-messages',l:'✉️ رسائل أولياء الأمور'},{id:'donors',l:'💚 المتبرعون'}
     ];
   } else if (CP.role === 'supervisor') {
-    tabs = [{id:'sup-home',l:'🔔 متابعة حلقاتي والنشاط'},{id:'sup-compare',l:'📊 مقارنة الحلقات'},{id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'reports-view',l:'📊 التقارير الشهرية'},{id:'top3',l:'🏆 الفرسان'}];
+    tabs = [{id:'sup-home',l:'🔔 متابعة حلقاتي والنشاط'},{id:'sup-compare',l:'📊 مقارنة الحلقات'},{id:'evaluations',l:'⭐ تقييم المحفظين'},{id:'reports-view',l:'📊 التقارير الشهرية'},{id:'ideal',l:'🌟 المحفظ المثالي'},{id:'top3',l:'🏆 الفرسان'}];
   } else if (CP.role === 'teacher') {
     tabs = [
       {id:'teacher-home',l:'🏠 حلقتي'},{id:'students',l:'🎓 طلابي'},
@@ -1330,7 +1330,7 @@ function loadPage(id) {
     supervisors: loadSupervisors, students: loadStudents, attendance: initAtt,
     memorization: () => { loadMemo(); populateMemoStudents(); populateMemoCircleFilter(); },
     behavior: () => { loadBehavior(); populateStudentsForRole('beh-student'); populateSel('beh-circle', CP.role==='teacher'?null:'circles').then(()=>{ if(CP.role==='teacher') sb.from('circles').select('id,name').or('teacher_id.eq.'+CU.id+',co_teacher_id.eq.'+CU.id).then(({data})=>{ const s=document.getElementById('beh-circle'); if(s&&data) { s.innerHTML='<option value="">اختر الحلقة</option>'+data.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); if(data.length===1){s.value=data[0].id;loadBehStudents();} } }); }); },
-    evaluations: loadEvals, top3: loadTop3, parent: loadParent,
+    evaluations: loadEvals, top3: loadTop3, ideal: loadIdeal, parent: loadParent,
     'teacher-home': loadTeacherHome, 'sup-home': loadActivity, 'sup-compare': loadSupCompare,
     'weekly-report': initWeeklyReport, 'monthly-report': initMonthlyReport, 'reports-view': initReportsView,
     'donors': loadDonors,
@@ -1470,6 +1470,10 @@ function buildPages() {
     <div class="card"><div class="ch"><h3>سجل تقييمات المحفظين</h3></div><div class="cb"><div class="tw"><table id="eval-body-table"><thead><tr><th>المحفظ</th><th>الشهر</th><th>الزيارات</th><th>خطة الحفظ</th><th>توصيات المشرف</th><th>أداء الطالب</th><th>التقرير الأسبوعي</th><th>المواعيد</th><th>إدارة الحلقة</th><th>التفاعل مع القيمة</th><th>تحفيز الفرسان</th><th>المجموع</th><th>إجراءات</th></tr></thead><tbody id="eval-body"></tbody></table></div></div></div>
   </div>
 
+  <div class="page" id="p-ideal">
+    <div class="stitle">🌟 المحفظ المثالي</div>
+    <div id="ideal-content"></div>
+  </div>
   <div class="page" id="p-top3">
     <div class="stitle">🏆 فرسان الحلقات (أفضل 3 طلاب)</div>
     <div style="margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -4208,6 +4212,129 @@ function printStandalone(html) {
   go(iframe.contentWindow);
 }
 
+
+
+// ===================== المحفظ المثالي =====================
+// الدرجة من 100 = التفاعل مع البرنامج (50) + تقييم المشرف (50)
+// التفاعل (آخر 30 يومًا، أيام الدوام الأحد–الأربعاء): الحضور 15، الحفظ 15، السلوك والمراجعة 5، التقرير الأسبوعي 10، التقرير الشهري 5
+async function loadIdeal() {
+  const root = document.getElementById('ideal-content'); if (!root) return;
+  root.innerHTML = emptyDiv('⏳', 'جارٍ حساب المحفظ المثالي...');
+  try {
+    const isSup = CP.role === 'supervisor';
+    const now = new Date(); const todayS = ymdLocal(now);
+    const from = new Date(now); from.setDate(from.getDate() - 29); const fromS = ymdLocal(from);
+    const evFrom = new Date(now); evFrom.setDate(evFrom.getDate() - 62);
+    const sendFrom = new Date(now); sendFrom.setDate(sendFrom.getDate() - 36);
+    const wd = []; for (const d = new Date(fromS + 'T00:00:00'); ymdLocal(d) <= todayS; d.setDate(d.getDate() + 1)) if (d.getDay() <= 3) wd.push(ymdLocal(d));
+    const W = wd.length || 1;
+    const [circles, students, att, memo, beh, rev, sends, mrs, evs, sc, profs] = await Promise.all([
+      fetchAllRows(() => sb.from('circles').select('id,name,teacher_id,teacher_name,is_official')),
+      fetchAllRows(() => sb.from('students').select('id,circle_id')),
+      fetchAllRows(() => sb.from('attendance').select('date,created_by,status,student_id').gte('date', fromS)),
+      fetchAllRows(() => sb.from('memorization_log').select('date,recorded_by,student_id').gte('date', fromS)),
+      fetchAllRows(() => sb.from('behavior_log').select('date,recorded_by,student_id').gte('date', fromS)),
+      fetchAllRows(() => sb.from('review_log').select('date,recorded_by,student_id').gte('date', fromS)),
+      fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,student_id,sent_count,week_start').gte('week_start', ymdLocal(sendFrom))),
+      fetchAllRows(() => sb.from('monthly_reports').select('teacher_id,status,month,year').gte('year', now.getFullYear() - 1)),
+      fetchAllRows(() => sb.from('teacher_evaluations').select('teacher_id,evaluator_id,eval_date,total_score').gte('eval_date', ymdLocal(evFrom))),
+      fetchAllRows(() => sb.from('supervisor_circles').select('supervisor_id,circle_id')),
+      fetchAllRows(() => sb.from('profiles').select('id,full_name,role,activity_excluded').in('role', ['teacher', 'supervisor'])).catch(() => [])
+    ]);
+    const excluded = new Set(profs.filter(p => p.activity_excluded).map(p => p.id));
+    const offC = c => c.is_official === false;
+    const offCircles = circles.filter(c => c.teacher_id && !offC(c) && !excluded.has(c.teacher_id));
+    const circleOf = {}; offCircles.forEach(c => circleOf[c.id] = c);
+    const stuCircle = {}; students.forEach(x => { if (circleOf[x.circle_id]) stuCircle[x.id] = x.circle_id; });
+    const circleN = {}; Object.values(stuCircle).forEach(cid => circleN[cid] = (circleN[cid] || 0) + 1);
+    const tName = {}; offCircles.forEach(c => tName[c.teacher_id] = tName[c.teacher_id] || c.teacher_name || '—');
+    profs.forEach(p => { if (p.role === 'teacher' && tName[p.id]) tName[p.id] = p.full_name; });
+    const teacherIds = Object.keys(tName);
+    const tCircles = {}; offCircles.forEach(c => (tCircles[c.teacher_id] = tCircles[c.teacher_id] || []).push(c));
+
+    // أيام التسجيل المميزة لكل محفظ
+    const daysOf = (rows, key) => { const m = {}; rows.forEach(r => { if (!stuCircle[r.student_id]) return; (m[r[key]] = m[r[key]] || new Set()).add(r.date); }); return m; };
+    const attDays = daysOf(att, 'created_by'), memoDays = daysOf(memo, 'recorded_by'), behDays = daysOf(beh, 'recorded_by'), revDays = daysOf(rev, 'recorded_by');
+
+    // التقرير الأسبوعي: نسبة من أُرسل لهم إلى من حضر، لكل أسبوع منتهٍ (أحد–أربعاء)
+    const weekKeys = []; { const d = new Date(fromS + 'T00:00:00'); while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
+      for (; ; d.setDate(d.getDate() + 7)) { const end = new Date(d); end.setDate(end.getDate() + 3); if (ymdLocal(end) > todayS) break; weekKeys.push(ymdLocal(d)); } }
+    const presentWk = {}; att.forEach(r => { if (r.status !== 'present' || !stuCircle[r.student_id]) return; const dd = new Date(r.date + 'T00:00:00'); dd.setDate(dd.getDate() - dd.getDay()); const k = ymdLocal(dd), t = circleOf[stuCircle[r.student_id]].teacher_id; ((presentWk[t] = presentWk[t] || {})[k] = presentWk[t][k] || new Set()).add(r.student_id); });
+    const sentAcc = {}; sends.forEach(r => { const c = circleOf[r.circle_id]; if (!c) return; const dt = new Date(r.week_start + 'T00:00:00'); if (dt.getDay() === 6) dt.setDate(dt.getDate() + 1); const k = ymdLocal(dt); const o = (((sentAcc[c.teacher_id] = sentAcc[c.teacher_id] || {})[k] = sentAcc[c.teacher_id][k] || {})[r.circle_id] = sentAcc[c.teacher_id][k][r.circle_id] || { ids: new Set(), legacy: 0 }); if (r.student_id) o.ids.add(r.student_id); else o.legacy += (r.sent_count || 0); });
+    const sentN = (t, k) => { let tot = 0; const a = ((sentAcc[t] || {})[k]) || {}; Object.keys(a).forEach(cid => { tot += Math.min(circleN[cid] || Infinity, a[cid].ids.size + a[cid].legacy); }); return tot; };
+
+    // التقرير الشهري: آخر شهر استحقاقًا (الحالي من 25، وإلا السابق)
+    const dueDate = now.getDate() >= 25 ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const dueM = dueDate.getMonth() + 1, dueY = dueDate.getFullYear();
+    const mrDone = new Set(mrs.filter(r => r.status === 'submitted' && r.month === dueM && r.year === dueY).map(r => r.teacher_id));
+
+    // آخر تقييم خلال 62 يومًا
+    const evBy = {}; evs.forEach(e => { if (!evBy[e.teacher_id] || e.eval_date > evBy[e.teacher_id].eval_date) evBy[e.teacher_id] = e; });
+
+    const res = {};
+    teacherIds.forEach(t => {
+      const r1 = x => Math.min(1, ((x[t] || new Set()).size) / W);
+      const attR = r1(attDays), memoR = r1(memoDays), brR = (r1(behDays) + r1(revDays)) / 2;
+      const ratios = []; weekKeys.forEach(k => { const D = ((presentWk[t] || {})[k] || new Set()).size; if (D > 0) ratios.push(Math.min(1, sentN(t, k) / D)); });
+      const wkR = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
+      const mR = mrDone.has(t) ? 1 : 0;
+      const eng = 15 * attR + 15 * memoR + 5 * brR + 10 * wkR + 5 * mR;
+      const e = evBy[t]; const pct = e ? Math.min(1, (e.total_score || 0) / evMax(e.eval_date)) : null;
+      const evPts = pct === null ? 0 : 50 * pct;
+      res[t] = { id: t, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, attR, memoR, wkR, mR, brR };
+    });
+    const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.total - a.total || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
+
+    // المشرفون وطاقمهم
+    const supTeachers = {}; sc.forEach(x => { const c = circleOf[x.circle_id]; if (c) (supTeachers[x.supervisor_id] = supTeachers[x.supervisor_id] || new Set()).add(c.teacher_id); });
+    let supList = Object.keys(supTeachers).map(id => ({ id, name: (profs.find(p => p.id === id) || {}).full_name || (id === CU.id ? CP.full_name : 'مشرف'), ids: [...supTeachers[id]] }));
+    if (isSup) supList = supList.filter(x => x.id === CU.id);
+    supList.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+    const medals = ['🥇', '🥈', '🥉'];
+    const pctTxt = v => Math.round(v * 100) + '%';
+    const row = (t, i, big) => `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1.5px solid ${i === 0 ? 'var(--gold)' : 'var(--gray2)'};border-radius:14px;margin-bottom:8px;background:${i === 0 ? '#fffaf0' : '#fff'}">
+        <div style="font-size:${big ? 30 : 24}px">${medals[i] || (i + 1)}</div>
+        <div style="flex:1;min-width:170px">
+          <div style="font-weight:800;font-size:15px">${escapeHtml(t.name)}</div>
+          <div style="font-size:11px;color:var(--mid)">${t.circles.map(escapeHtml).join('، ')}</div>
+          <div style="font-size:11px;color:var(--mid);margin-top:4px">حضور ${pctTxt(t.attR)} · حفظ ${pctTxt(t.memoR)} · تقرير أسبوعي ${pctTxt(t.wkR)} · تقرير شهري ${t.mR ? '✔' : '✘'}</div>
+        </div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التفاعل</div><div style="font-weight:800;color:#14568f">${t.eng.toFixed(1)}<small>/50</small></div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/50</small>' : 'لم يُقيَّم'}</div></div>
+        <div style="text-align:center;min-width:70px;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:12px;padding:6px 10px"><div style="font-size:10px;color:var(--gd)">المجموع</div><div style="font-weight:900;font-size:18px;color:var(--gd)">${t.total.toFixed(1)}<small>/100</small></div></div>
+      </div>`;
+    const section = (title, sub, list) => {
+      const top = list.slice(0, 3), rest = list.slice(3);
+      return `<div class="card"><div class="ch"><h3>${title}</h3></div><div class="cb">
+        ${sub ? `<div style="font-size:12px;color:var(--mid);margin-bottom:10px">${sub}</div>` : ''}
+        ${top.length ? top.map((t, i) => row(t, i)).join('') : '<div style="color:var(--mid)">لا توجد بيانات كافية.</div>'}
+        ${rest.length ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px">عرض بقية المحفظين (${rest.length})</summary><div style="margin-top:8px">${rest.map((t, i) => row(t, i + 3)).join('')}</div></details>` : ''}
+      </div></div>`;
+    };
+
+    let html = '';
+    const anyEval = Object.values(res).some(x => x.hasEval);
+    if (!anyEval) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb" style="font-size:13px">ℹ️ لا توجد تقييمات للمشرفين خلال آخر شهرين، لذلك يظهر الترتيب الآن بحسب التفاعل مع البرنامج فقط (من 50). يكتمل الترتيب تلقائيًا بعد أن يقيّم المشرفون المحفظين (يُفتح التقييم يوم 28).</div></div>`;
+    if (!isSup) html += section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله', rank(teacherIds));
+    supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids)); });
+    if (!supList.length && isSup) html += emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.');
+    html += `<div class="card"><div class="ch"><h3>كيف تُحسب الدرجة؟</h3></div><div class="cb" style="font-size:13px;line-height:2">
+      <strong>المجموع من 100 = التفاعل مع البرنامج (50) + تقييم المشرف (50)</strong><br>
+      <strong>التفاعل (آخر 30 يومًا، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط):</strong><br>
+      • تسجيل الحضور: 15 درجة (حسب نسبة أيام الدوام التي سجّل فيها)<br>
+      • تسجيل الحفظ: 15 درجة (بنفس الطريقة)<br>
+      • تسجيل السلوك والمراجعة: 5 درجات<br>
+      • التقرير الأسبوعي: 10 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
+      • التقرير الشهري: 5 درجات (إن رفعه عن آخر شهر مستحق)<br>
+      <strong>التقييم:</strong> أحدث تقييم من المشرف خلال آخر شهرين محوَّلًا إلى 50 درجة. من لم يُقيَّم لا تُحتسب له درجات التقييم.
+    </div></div>`;
+    root.innerHTML = html;
+  } catch (e) {
+    console.error(e);
+    root.innerHTML = emptyDiv('⚠️', 'تعذّر حساب المحفظ المثالي: ' + (e.message || e));
+  }
+}
 
 // ===================== متابعة النشاط (للمدير) =====================
 function ymdLocal(d) {
