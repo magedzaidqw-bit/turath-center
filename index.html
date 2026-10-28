@@ -6442,7 +6442,7 @@ function printDonorReport(donorName) {
 
   const printWin = window.open('', '_blank');
   if (!printWin) { alert('يرجى السماح بفتح النوافذ المنبثقة'); return; }
-  printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+  printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير ${String(donorName||'').replace(/[<>&]/g,'')} - ${monthName}</title>
     <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
       *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
