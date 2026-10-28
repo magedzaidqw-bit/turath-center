@@ -4215,8 +4215,7 @@ function printStandalone(html) {
 
 
 // ===================== المحفظ المثالي =====================
-// الدرجة من 100 = التفاعل مع البرنامج (50) + تقييم المشرف (50)
-// التفاعل (آخر 30 يومًا، أيام الدوام الأحد–الأربعاء): الحضور 15، الحفظ 15، السلوك والمراجعة 5، التقرير الأسبوعي 10، التقرير الشهري 5
+// الدرجة من 80 = تقييم المشرف (60) + درجات البرنامج للتفاعل (20)
 async function loadIdeal() {
   const root = document.getElementById('ideal-content'); if (!root) return;
   root.innerHTML = emptyDiv('⏳', 'جارٍ حساب المحفظ المثالي...');
@@ -4278,9 +4277,9 @@ async function loadIdeal() {
       const ratios = []; weekKeys.forEach(k => { const D = ((presentWk[t] || {})[k] || new Set()).size; if (D > 0) ratios.push(Math.min(1, sentN(t, k) / D)); });
       const wkR = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
       const mR = mrDone.has(t) ? 1 : 0;
-      const eng = 15 * attR + 15 * memoR + 5 * brR + 10 * wkR + 5 * mR;
+      const eng = 6 * attR + 6 * memoR + 2 * brR + 4 * wkR + 2 * mR;
       const e = evBy[t]; const pct = e ? Math.min(1, (e.total_score || 0) / evMax(e.eval_date)) : null;
-      const evPts = pct === null ? 0 : 50 * pct;
+      const evPts = pct === null ? 0 : 60 * pct;
       res[t] = { id: t, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, attR, memoR, wkR, mR, brR };
     });
     const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.total - a.total || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
@@ -4300,9 +4299,9 @@ async function loadIdeal() {
           <div style="font-size:11px;color:var(--mid)">${t.circles.map(escapeHtml).join('، ')}</div>
           <div style="font-size:11px;color:var(--mid);margin-top:4px">حضور ${pctTxt(t.attR)} · حفظ ${pctTxt(t.memoR)} · تقرير أسبوعي ${pctTxt(t.wkR)} · تقرير شهري ${t.mR ? '✔' : '✘'}</div>
         </div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التفاعل</div><div style="font-weight:800;color:#14568f">${t.eng.toFixed(1)}<small>/50</small></div></div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/50</small>' : 'لم يُقيَّم'}</div></div>
-        <div style="text-align:center;min-width:70px;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:12px;padding:6px 10px"><div style="font-size:10px;color:var(--gd)">المجموع</div><div style="font-weight:900;font-size:18px;color:var(--gd)">${t.total.toFixed(1)}<small>/100</small></div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التفاعل</div><div style="font-weight:800;color:#14568f">${t.eng.toFixed(1)}<small>/20</small></div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/60</small>' : 'لم يُقيَّم'}</div></div>
+        <div style="text-align:center;min-width:70px;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:12px;padding:6px 10px"><div style="font-size:10px;color:var(--gd)">المجموع</div><div style="font-weight:900;font-size:18px;color:var(--gd)">${t.total.toFixed(1)}<small>/80</small></div></div>
       </div>`;
     const section = (title, sub, list) => {
       const top = list.slice(0, 3), rest = list.slice(3);
@@ -4315,19 +4314,19 @@ async function loadIdeal() {
 
     let html = '';
     const anyEval = Object.values(res).some(x => x.hasEval);
-    if (!anyEval) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb" style="font-size:13px">ℹ️ لا توجد تقييمات للمشرفين خلال آخر شهرين، لذلك يظهر الترتيب الآن بحسب التفاعل مع البرنامج فقط (من 50). يكتمل الترتيب تلقائيًا بعد أن يقيّم المشرفون المحفظين (يُفتح التقييم يوم 28).</div></div>`;
+    if (!anyEval) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb" style="font-size:13px">ℹ️ لا توجد تقييمات للمشرفين خلال آخر شهرين، لذلك يظهر الترتيب الآن بحسب درجات التفاعل مع البرنامج فقط (من 20). يكتمل الترتيب تلقائيًا بعد أن يقيّم المشرفون المحفظين (يُفتح التقييم يوم 28).</div></div>`;
     if (!isSup) html += section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله', rank(teacherIds));
     supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids)); });
     if (!supList.length && isSup) html += emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.');
     html += `<div class="card"><div class="ch"><h3>كيف تُحسب الدرجة؟</h3></div><div class="cb" style="font-size:13px;line-height:2">
-      <strong>المجموع من 100 = التفاعل مع البرنامج (50) + تقييم المشرف (50)</strong><br>
+      <strong>المجموع من 80 = تقييم المشرف (60) + درجات البرنامج للتفاعل (20)</strong><br>
       <strong>التفاعل (آخر 30 يومًا، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط):</strong><br>
-      • تسجيل الحضور: 15 درجة (حسب نسبة أيام الدوام التي سجّل فيها)<br>
-      • تسجيل الحفظ: 15 درجة (بنفس الطريقة)<br>
-      • تسجيل السلوك والمراجعة: 5 درجات<br>
-      • التقرير الأسبوعي: 10 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
-      • التقرير الشهري: 5 درجات (إن رفعه عن آخر شهر مستحق)<br>
-      <strong>التقييم:</strong> أحدث تقييم من المشرف خلال آخر شهرين محوَّلًا إلى 50 درجة. من لم يُقيَّم لا تُحتسب له درجات التقييم.
+      • تسجيل الحضور: 6 درجات (حسب نسبة أيام الدوام التي سجّل فيها)<br>
+      • تسجيل الحفظ: 6 درجات (بنفس الطريقة)<br>
+      • تسجيل السلوك والمراجعة: 2 درجة<br>
+      • التقرير الأسبوعي: 4 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
+      • التقرير الشهري: 2 درجة (إن رفعه عن آخر شهر مستحق)<br>
+      <strong>تقييم المشرف:</strong> أحدث تقييم أدخله المشرف خلال آخر شهرين، محوَّلًا إلى 60 درجة. من لم يُقيَّم لا تُحتسب له درجات التقييم.
     </div></div>`;
     root.innerHTML = html;
   } catch (e) {
