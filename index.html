@@ -1547,6 +1547,7 @@ function buildModals() {
     <div class="fg"><label>اسم الحلقة</label><input type="text" id="c-name" placeholder="مثل: حلقة الفجر"></div>
     <div class="fg"><label>المحفظ</label><select id="c-teacher"><option value="">اختر محفظاً</option></select></div>
     <div class="fg"><label>محفظ مشارك (اختياري — يرى طلاب الحلقة ويسجّل لهم كالمحفظ)</label><select id="c-coteacher"><option value="">— لا يوجد —</option></select></div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="c-official" checked style="width:auto"> حلقة رسمية (يُحسب نشاطها في متابعة نشاط المحفظ)</label></div>
     <div class="fg"><label>الموعد</label>
       <div style="display:flex;align-items:center;gap:8px;background:var(--gray);border-radius:12px;padding:10px 14px;border:1.5px solid var(--gray2)">
         <span style="color:var(--mid);font-size:13px;white-space:nowrap">من الأحد إلى الأربعاء —</span>
@@ -2181,13 +2182,13 @@ async function loadCircles() {
   const b = document.getElementById('circles-body');
   b.innerHTML = data?.length ? data.map((c,i)=>`<tr>
     <td style="color:var(--mid);font-weight:700">${i+1}</td>
-    <td><strong>${c.name}</strong></td>
+    <td><strong>${c.name}</strong>${c.is_official === false ? ' <span class="badge badge-yellow" style="font-size:10px">غير رسمية</span>' : ''}</td>
     <td>${c.teacher_name || '—'}${c.co_teacher_id && coNames[c.co_teacher_id] ? '<br><small style="color:#14568f">+ مشارك: ' + escapeHtml(coNames[c.co_teacher_id]) + '</small>' : ''}</td>
     <td>${c.schedule||'—'}</td>
     <td>${c.location||'—'}</td>
     <td><span class="badge be">${cnt[c.id]||0} طالب</span></td>
     <td>
-      <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}')">✏️</button>
+      <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}','${c.is_official === false ? '0' : '1'}')">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delCircle('${c.id}')">حذف</button>
     </td></tr>`).join('') : emptyRow(7,'لا توجد حلقات — تأكد من الاتصال بقاعدة البيانات');
 }
@@ -2197,12 +2198,14 @@ function resetCircleForm() {
   document.querySelector('#m-circle .mh h3').textContent = 'إضافة حلقة';
   document.querySelector('#m-circle .btn-pri').textContent = 'حفظ';
   document.getElementById('c-name').value = '';
+  document.getElementById('c-official').checked = true;
   document.getElementById('c-schedule').value = '';
   document.getElementById('c-location').value = '';
   openM('m-circle');
 }
-function editCircle(id,name,teacherId,schedule,location,coTeacherId) {
+function editCircle(id,name,teacherId,schedule,location,coTeacherId,isOfficial) {
   editingCircleId = id;
+  document.getElementById('c-official').checked = isOfficial !== '0';
   document.getElementById('c-name').value = name;
   // استخراج الوقت فقط (للتوافق مع البيانات القديمة)
   const timeOnly = schedule.includes('—') ? schedule.split('—')[1].trim() : schedule;
@@ -2219,12 +2222,12 @@ async function saveCircle() {
   if(!scheduleTime){alert('اختر وقت الحلقة');return;}
   const schedule = scheduleTime; // نحفظ الوقت فقط
   if (editingCircleId) {
-    await sb.from('circles').update({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location}).eq('id', editingCircleId);
+    await sb.from('circles').update({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location,is_official:document.getElementById('c-official').checked}).eq('id', editingCircleId);
     editingCircleId = null;
     document.querySelector('#m-circle .mh h3').textContent = 'إضافة حلقة';
     document.querySelector('#m-circle .btn-pri').textContent = 'حفظ';
   } else {
-    await sb.from('circles').insert({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location});
+    await sb.from('circles').insert({name,teacher_id:teacher||null,teacher_profile_id:teacher||null,co_teacher_id:v('c-coteacher')||null,schedule,location,is_official:document.getElementById('c-official').checked});
   }
   closeM('m-circle'); loadCircles();
 }
@@ -4195,19 +4198,29 @@ async function loadActivity() {
       myCircleIds = (links || []).map(l => l.circle_id);
       if (!myCircleIds.length) { root.innerHTML = emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.'); return; }
     }
-    const [profs0, circles, students, att, memo, beh, wk, mr, evs, sc, rev] = await Promise.all([
+    const [profs0, circles0, students0, att0, memo0, beh0, wk, mr, evs, sc, rev0] = await Promise.all([
       isSup ? Promise.resolve([]) : fetchAllRows(() => sb.from('profiles').select('id,full_name,role,phone').in('role', ['teacher','supervisor'])),
-      fetchAllRows(() => isSup ? sb.from('circles').select('id,name,teacher_id,teacher_name').in('id', myCircleIds) : sb.from('circles').select('id,name,teacher_id,teacher_name')),
+      fetchAllRows(() => isSup ? sb.from('circles').select('id,name,teacher_id,teacher_name,is_official').in('id', myCircleIds) : sb.from('circles').select('id,name,teacher_id,teacher_name,is_official')),
       fetchAllRows(() => sb.from('students').select('id,circle_id,created_at')),
       fetchAllRows(() => sb.from('attendance').select('date,created_by,status,student_id').gte('date', fromStr)),
-      fetchAllRows(() => sb.from('memorization_log').select('date,recorded_by').gte('date', fromStr)),
-      fetchAllRows(() => sb.from('behavior_log').select('date,recorded_by').gte('date', fromStr)),
+      fetchAllRows(() => sb.from('memorization_log').select('date,recorded_by,student_id').gte('date', fromStr)),
+      fetchAllRows(() => sb.from('behavior_log').select('date,recorded_by,student_id').gte('date', fromStr)),
       fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,sent_count,week_start').eq('week_start', weekStartStr)),
       fetchAllRows(() => sb.from('monthly_reports').select('teacher_id,status,month,year,submitted_at').eq('month', now.getMonth()+1).eq('year', now.getFullYear())),
       fetchAllRows(() => sb.from('teacher_evaluations').select('teacher_id,evaluator_id,eval_date,created_at')),
       fetchAllRows(() => sb.from('supervisor_circles').select('supervisor_id,circle_id')),
-      fetchAllRows(() => sb.from('review_log').select('date,recorded_by').gte('date', fromStr))
+      fetchAllRows(() => sb.from('review_log').select('date,recorded_by,student_id').gte('date', fromStr))
     ]);
+
+    // الحلقات غير الرسمية لا تدخل في متابعة النشاط (لا طلابها ولا حضورها ولا حفظها)
+    const offCircles = new Set(circles0.filter(c => c.is_official === false).map(c => c.id));
+    const circles = circles0.filter(c => !offCircles.has(c.id));
+    const students = students0.filter(x => !offCircles.has(x.circle_id));
+    const offStu = new Set(students0.filter(x => offCircles.has(x.circle_id)).map(x => x.id));
+    const att = att0.filter(r => !offStu.has(r.student_id));
+    const memo = memo0.filter(r => !offStu.has(r.student_id));
+    const beh = beh0.filter(r => !offStu.has(r.student_id));
+    const rev = rev0.filter(r => !offStu.has(r.student_id));
 
     let profs = profs0;
     if (isSup) {
@@ -4287,6 +4300,7 @@ async function loadActivity() {
     const circleN = {}; students.forEach(s0 => { circleN[s0.circle_id] = (circleN[s0.circle_id] || 0) + 1; });
     const wkAcc = {}; // [teacher][weekKey][circle] = { ids:Set, legacy:n }
     wkMonthRows.forEach(r => {
+      if (offCircles.has(r.circle_id)) return;
       const dt = new Date(r.week_start + 'T00:00:00');
       if (dt.getDay() === 6) dt.setDate(dt.getDate() + 1); // سجلات منتصف الليل التي حُفظت بتاريخ السبت (فرق التوقيت)
       const k = ymdLocal(dt), t = r.teacher_id || circleTeacher[r.circle_id];
