@@ -4277,7 +4277,11 @@ async function loadIdeal() {
 
     // أيام التسجيل المميزة لكل محفظ
     const daysOf = (rows, key) => { const m = {}; rows.forEach(r => { if (!stuCircle[r.student_id] || !inR(r.date)) return; (m[r[key]] = m[r[key]] || new Set()).add(r.date); }); return m; };
-    const attDays = daysOf(att, 'created_by'), memoDays = daysOf(memo, 'recorded_by'), behDays = daysOf(beh, 'recorded_by'), revDays = daysOf(rev, 'recorded_by');
+    // التغطية لكل طالب: في كل يوم دوام، نسبة الطلبة الذين سُجّل لهم (فيعدل الحساب بين حلقة 4 طلاب وحلقة 15 طالبًا)
+    const byDay = (rows, key) => { const m = {}; rows.forEach(r => { if (!stuCircle[r.student_id] || !inR(r.date)) return; const t = r[key]; ((m[t] = m[t] || {})[r.date] = (m[t][r.date] || new Set())).add(r.student_id); }); return m; };
+    const attBy = byDay(att, 'created_by'), presBy = byDay(att.filter(r => r.status === 'present'), 'created_by'),
+      memoBy = byDay(memo, 'recorded_by'), behBy = byDay(beh, 'recorded_by'), revBy = byDay(rev, 'recorded_by');
+    const stuN = {}; offCircles.forEach(c => stuN[c.teacher_id] = (stuN[c.teacher_id] || 0) + (circleN[c.id] || 0));
 
     // التقرير الأسبوعي: نسبة من أُرسل لهم إلى من حضر، لكل أسبوع منتهٍ (أحد–أربعاء)
     const weekKeys = []; { const d = new Date(fromS + 'T00:00:00'); while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
@@ -4297,15 +4301,18 @@ async function loadIdeal() {
     const res = {};
     teacherIds.forEach(t => {
       const vd = validDays(t), W = vd.size;
-      const r1 = x => W ? [...(x[t] || [])].filter(k => vd.has(k)).length / W : 0;
-      const attR = r1(attDays), memoR = r1(memoDays), brR = (r1(behDays) + r1(revDays)) / 2;
+      const N = stuN[t] || 0;
+      const covAtt = () => { if (!W || !N) return 0; let sum = 0; vd.forEach(k => { sum += Math.min(1, (((attBy[t] || {})[k]) || new Set()).size / N); }); return sum / W; };
+      const covPres = num => { let sum = 0, days = 0; vd.forEach(k => { const pr = ((presBy[t] || {})[k] || new Set()).size; if (!pr) return; days++; sum += Math.min(1, ((((num[t] || {})[k]) || new Set()).size) / pr); }); return days ? sum / days : 0; };
+      const attR = covAtt(), memoR = covPres(memoBy), brR = (covPres(behBy) + covPres(revBy)) / 2;
+      const loadR = Math.min(1, N / 15);
       const ratios = []; weekKeys.forEach(k => { const D = ((presentWk[t] || {})[k] || new Set()).size; if (D > 0) ratios.push(Math.min(1, sentN(t, k) / D)); });
       const wkR = ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0;
       const mR = mrDone.has(t) ? 1 : 0;
-      const eng = 6 * attR + 6 * memoR + 2 * brR + 4 * wkR + 2 * mR;
+      const eng = 5 * attR + 5 * memoR + 2 * brR + 3 * wkR + 1 * mR + 4 * loadR;
       const e = evBy[t]; const pct = e ? Math.min(1, (e.total_score || 0) / evMax(e.eval_date)) : null;
       const evMx = e ? evMax(e.eval_date) : evMax(todayS); const evPts = e ? Math.min(evMx, e.total_score || 0) : 0;
-      res[t] = { W, id: t, evMx, mx: evMx + 20, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, ratio: (eng + evPts) / (evMx + 20), attR, memoR, wkR, mR, brR };
+      res[t] = { W, N, loadR, id: t, evMx, mx: evMx + 20, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, ratio: (eng + evPts) / (evMx + 20), attR, memoR, wkR, mR, brR };
     });
     const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.ratio - a.ratio || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
 
@@ -4322,7 +4329,7 @@ async function loadIdeal() {
         <div style="flex:1;min-width:170px">
           <div style="font-weight:800;font-size:15px">${escapeHtml(t.name)}</div>
           <div style="font-size:11px;color:var(--mid)">${t.circles.map(escapeHtml).join('، ')}</div>
-          <div style="font-size:11px;color:var(--mid);margin-top:4px">حضور ${pctTxt(t.attR)} · حفظ ${pctTxt(t.memoR)} · تقرير أسبوعي ${pctTxt(t.wkR)} · تقرير شهري ${t.mR ? '✔' : '✘'}</div>
+          <div style="font-size:11px;color:var(--mid);margin-top:4px">حضور ${pctTxt(t.attR)} · حفظ ${pctTxt(t.memoR)} · تقرير أسبوعي ${pctTxt(t.wkR)} · تقرير شهري ${t.mR ? '✔' : '✘'} · عدد الطلبة ${t.N}</div>
         </div>
         <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التفاعل</div><div style="font-weight:800;color:#14568f">${t.eng.toFixed(1)}<small>/20</small></div></div>
         <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/' + t.evMx + '</small>' : 'لم يُقيَّم'}</div></div>
@@ -4354,11 +4361,12 @@ async function loadIdeal() {
     html += `<div class="card"><div class="ch"><h3>كيف تُحسب الدرجة؟</h3></div><div class="cb" style="font-size:13px;line-height:2">
       <strong>المجموع = تقييم المشرف + درجات البرنامج للتفاعل (20)</strong><br>تقييم شهر أكتوبر: 60 + 20 = 80 · وابتداءً من نوفمبر 2026: 80 + 20 = 100<br>
       <strong>التفاعل (الشهر الحالي، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط، دون العطل وإجازات المحفظ):</strong><br>
-      • تسجيل الحضور: 6 درجات (حسب نسبة أيام الدوام التي سجّل فيها)<br>
-      • تسجيل الحفظ: 6 درجات (بنفس الطريقة)<br>
+      • تسجيل الحضور: 5 درجات (نسبة الطلبة الذين سجّل حضورهم في كل يوم دوام)<br>
+      • تسجيل الحفظ: 5 درجات (نسبة الحاضرين الذين سجّل لهم الحفظ)<br>
       • تسجيل السلوك والمراجعة: 2 درجة<br>
-      • التقرير الأسبوعي: 4 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
-      • التقرير الشهري: 2 درجة (إن رفعه عن آخر شهر مستحق)<br>
+      • التقرير الأسبوعي: 3 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
+      • التقرير الشهري: درجة واحدة (إن رفعه عن آخر شهر مستحق)<br>
+      • حجم الحلقة: 4 درجات (تزيد بزيادة عدد الطلبة حتى 15 طالبًا، تقديرًا لمن يتحمل عددًا أكبر)<br>
       <strong>تقييم المشرف:</strong> أحدث تقييم أدخله المشرف خلال آخر شهرين، كما أدخله (بدون تحويل). من لم يُقيَّم لا تُحتسب له درجات التقييم.
     </div></div>`;
     root.innerHTML = html;
