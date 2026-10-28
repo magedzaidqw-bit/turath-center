@@ -4215,7 +4215,7 @@ function printStandalone(html) {
 
 
 // ===================== المحفظ المثالي =====================
-// الدرجة من 80 = تقييم المشرف (60) + درجات البرنامج للتفاعل (20)
+// الدرجة = تقييم المشرف (60 حتى أكتوبر 2026، ثم 80) + درجات البرنامج للتفاعل (20)
 async function loadIdeal() {
   const root = document.getElementById('ideal-content'); if (!root) return;
   root.innerHTML = emptyDiv('⏳', 'جارٍ حساب المحفظ المثالي...');
@@ -4279,10 +4279,10 @@ async function loadIdeal() {
       const mR = mrDone.has(t) ? 1 : 0;
       const eng = 6 * attR + 6 * memoR + 2 * brR + 4 * wkR + 2 * mR;
       const e = evBy[t]; const pct = e ? Math.min(1, (e.total_score || 0) / evMax(e.eval_date)) : null;
-      const evPts = pct === null ? 0 : 60 * pct;
-      res[t] = { id: t, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, attR, memoR, wkR, mR, brR };
+      const evMx = e ? evMax(e.eval_date) : evMax(todayS); const evPts = e ? Math.min(evMx, e.total_score || 0) : 0;
+      res[t] = { id: t, evMx, mx: evMx + 20, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, ratio: (eng + evPts) / (evMx + 20), attR, memoR, wkR, mR, brR };
     });
-    const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.total - a.total || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
+    const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.ratio - a.ratio || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
 
     // المشرفون وطاقمهم
     const supTeachers = {}; sc.forEach(x => { const c = circleOf[x.circle_id]; if (c) (supTeachers[x.supervisor_id] = supTeachers[x.supervisor_id] || new Set()).add(c.teacher_id); });
@@ -4300,8 +4300,8 @@ async function loadIdeal() {
           <div style="font-size:11px;color:var(--mid);margin-top:4px">حضور ${pctTxt(t.attR)} · حفظ ${pctTxt(t.memoR)} · تقرير أسبوعي ${pctTxt(t.wkR)} · تقرير شهري ${t.mR ? '✔' : '✘'}</div>
         </div>
         <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التفاعل</div><div style="font-weight:800;color:#14568f">${t.eng.toFixed(1)}<small>/20</small></div></div>
-        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/60</small>' : 'لم يُقيَّم'}</div></div>
-        <div style="text-align:center;min-width:70px;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:12px;padding:6px 10px"><div style="font-size:10px;color:var(--gd)">المجموع</div><div style="font-weight:900;font-size:18px;color:var(--gd)">${t.total.toFixed(1)}<small>/80</small></div></div>
+        <div style="text-align:center;min-width:60px"><div style="font-size:11px;color:var(--mid)">التقييم</div><div style="font-weight:800;color:${t.hasEval ? '#6b46c1' : '#a3262b'}">${t.hasEval ? t.evPts.toFixed(1) + '<small>/' + t.evMx + '</small>' : 'لم يُقيَّم'}</div></div>
+        <div style="text-align:center;min-width:70px;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:12px;padding:6px 10px"><div style="font-size:10px;color:var(--gd)">المجموع</div><div style="font-weight:900;font-size:18px;color:var(--gd)">${t.total.toFixed(1)}<small>/${t.mx}</small></div></div>
       </div>`;
     const section = (title, sub, list) => {
       const top = list.slice(0, 3), rest = list.slice(3);
@@ -4319,14 +4319,14 @@ async function loadIdeal() {
     supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids)); });
     if (!supList.length && isSup) html += emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.');
     html += `<div class="card"><div class="ch"><h3>كيف تُحسب الدرجة؟</h3></div><div class="cb" style="font-size:13px;line-height:2">
-      <strong>المجموع من 80 = تقييم المشرف (60) + درجات البرنامج للتفاعل (20)</strong><br>
+      <strong>المجموع = تقييم المشرف + درجات البرنامج للتفاعل (20)</strong><br>تقييم شهر أكتوبر: 60 + 20 = 80 · وابتداءً من نوفمبر 2026: 80 + 20 = 100<br>
       <strong>التفاعل (آخر 30 يومًا، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط):</strong><br>
       • تسجيل الحضور: 6 درجات (حسب نسبة أيام الدوام التي سجّل فيها)<br>
       • تسجيل الحفظ: 6 درجات (بنفس الطريقة)<br>
       • تسجيل السلوك والمراجعة: 2 درجة<br>
       • التقرير الأسبوعي: 4 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
       • التقرير الشهري: 2 درجة (إن رفعه عن آخر شهر مستحق)<br>
-      <strong>تقييم المشرف:</strong> أحدث تقييم أدخله المشرف خلال آخر شهرين، محوَّلًا إلى 60 درجة. من لم يُقيَّم لا تُحتسب له درجات التقييم.
+      <strong>تقييم المشرف:</strong> أحدث تقييم أدخله المشرف خلال آخر شهرين، كما أدخله (بدون تحويل). من لم يُقيَّم لا تُحتسب له درجات التقييم.
     </div></div>`;
     root.innerHTML = html;
   } catch (e) {
