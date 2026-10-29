@@ -2803,7 +2803,7 @@ async function loadStudents() {
 }
 // ===================== القيمة الأسبوعية =====================
 async function getCurrentWeeklyValue() {
-  const { data } = await sb.from('weekly_values').select('*').order('week_start', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+  const { data } = await sb.from('weekly_values').select('*').lte('week_start', ymdLocal(new Date())).order('week_start', { ascending: false }).order('created_at', { ascending: false }).limit(1);
   return data && data[0] ? data[0] : null;
 }
 function weeklyValueCardHtml(w, big) {
@@ -2829,27 +2829,42 @@ async function renderWeeklyStrip(containerId) {
 async function loadWeeklyValue() {
   const cur = document.getElementById('wv-current'), ed = document.getElementById('wv-editor'), hi = document.getElementById('wv-history');
   cur.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ التحميل...</p></div>';
-  const { data: list } = await sb.from('weekly_values').select('*').order('week_start', { ascending: false }).order('created_at', { ascending: false }).limit(20);
+  const { data: all } = await sb.from('weekly_values').select('*').order('week_start', { ascending: false }).order('created_at', { ascending: false }).limit(80);
+  const todayK = ymdLocal(new Date());
+  const list = (all || []).filter(x => x.week_start <= todayK);
+  const upcoming = (all || []).filter(x => x.week_start > todayK).sort((a, b) => a.week_start.localeCompare(b.week_start));
   const w = list && list[0];
+  window._wvCurrent = w || null;
   cur.innerHTML = weeklyValueCardHtml(w, true);
   const canEdit = ['admin','supervisor'].includes(CP.role);
+  if (canEdit && w) cur.innerHTML += `<div style="margin:-6px 0 14px"><button class="btn btn-o btn-sm" onclick="shareWeeklyValueWA()">📱 إرسال القيمة لمجموعة المحفظين</button></div>`;
   ed.innerHTML = canEdit ? `<div class="card" style="margin-bottom:14px"><div class="ch"><h3>✍️ تحديد قيمة جديدة للأسبوع</h3></div><div class="cb">
-      <div class="fg"><label>القيمة</label><input type="text" id="wv-title" maxlength="60" placeholder="مثال: الصدق"></div>
-      <div class="fg"><label>شرح مختصر وما ينبغي أن يهتم به المحفظ ويطبّقه مع الطلاب</label><textarea id="wv-body" rows="5" maxlength="800" placeholder="اكتب نقاطاً مختصرة..."></textarea></div>
+      <div class="fg"><label>القيمة</label><input type="text" id="wv-title" maxlength="120" placeholder="مثال: الصدق"></div>
+      <div class="fg"><label>تاريخ ظهورها (اتركه اليوم لتظهر فورًا، أو اختر تاريخًا قادمًا لتظهر تلقائيًا فيه)</label><input type="date" id="wv-date" value="${todayK}"></div>
+      <div class="fg"><label>شرح مختصر وما ينبغي أن يهتم به المحفظ ويطبّقه مع الطلاب</label><textarea id="wv-body" rows="5" maxlength="1200" placeholder="اكتب نقاطاً مختصرة..."></textarea></div>
       <button class="btn btn-g" onclick="saveWeeklyValue()">📌 نشر القيمة للجميع</button>
-      <div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">تظهر لجميع المحفظين والطلاب وأولياء الأمور، وتبقى حتى تنشر قيمة جديدة.</div>
+      <div class="note" style="font-size:12px;color:var(--mid);margin-top:8px">تظهر لجميع المحفظين والطلاب وأولياء الأمور في تاريخ ظهورها، وتبقى حتى تظهر القيمة التي بعدها.</div>
     </div></div>` : '';
-  hi.innerHTML = list && list.length > 1 ? `<div class="card"><div class="ch"><h3>📚 القيم السابقة</h3></div><div class="cb">` + list.slice(1).map(x => `
+  const upHtml = canEdit && upcoming.length ? `<div class="card" style="margin-bottom:14px"><div class="ch"><h3>🗓️ القيم المجدولة (تظهر تلقائيًا في موعدها) — ${upcoming.length}</h3></div><div class="cb">` + upcoming.map(x => `
+      <details style="padding:8px 0;border-bottom:1px solid #e5e0d0"><summary style="cursor:pointer;display:flex;gap:10px;justify-content:space-between;align-items:center"><span><strong style="color:var(--gd)">${escapeHtml(x.title)}</strong> <span style="font-size:11px;color:var(--mid)">— تظهر ${x.week_start}</span></span><button class="btn btn-r btn-sm" onclick="event.preventDefault();delWeeklyValue('${x.id}')">حذف</button></summary>
+      <div style="font-size:12px;color:var(--mid);line-height:1.9;white-space:pre-wrap;margin-top:6px">${escapeHtml(x.body)}</div></details>`).join('') + `</div></div>` : '';
+  hi.innerHTML = upHtml + (list && list.length > 1 ? `<div class="card"><div class="ch"><h3>📚 القيم السابقة</h3></div><div class="cb">` + list.slice(1).map(x => `
       <div style="padding:10px 0;border-bottom:1px solid #e5e0d0;display:flex;gap:10px;align-items:flex-start;justify-content:space-between">
         <div><strong style="color:var(--gd)">${escapeHtml(x.title)}</strong><div style="font-size:12px;color:var(--mid);line-height:1.8;white-space:pre-wrap">${escapeHtml(x.body)}</div><div style="font-size:11px;color:#e5e0d0">${x.week_start}</div></div>
         ${canEdit ? `<button class="btn btn-r btn-sm" onclick="delWeeklyValue('${x.id}')">حذف</button>` : ''}
-      </div>`).join('') + `</div></div>` : '';
+      </div>`).join('') + `</div></div>` : '');
+}
+function shareWeeklyValueWA() {
+  const w = window._wvCurrent; if (!w) return;
+  const msg = `السلام عليكم ورحمة الله وبركاته 🌿\n\n🌟 القيمة التربوية لهذه الفترة\n*${w.title}*\n\n${w.body}\n\nنرجو من الإخوة المحفظين تخصيص 5 دقائق من كل حلقة لهذه القيمة، وتقييم المشرف يشمل التفاعل معها.\nجزاكم الله خيرًا 🌹\nإدارة مركز التراث`;
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
 }
 async function saveWeeklyValue() {
   const title = (document.getElementById('wv-title').value || '').trim();
   const body = (document.getElementById('wv-body').value || '').trim();
   if (!title || !body) { alert('اكتب القيمة وشرحها'); return; }
-  const { error } = await sb.from('weekly_values').insert({ title, body });
+  const wkDate = document.getElementById('wv-date')?.value || ymdLocal(new Date());
+  const { error } = await sb.from('weekly_values').insert({ title, body, week_start: wkDate });
   if (error) { alert('تعذر الحفظ: ' + error.message); return; }
   loadWeeklyValue();
 }
