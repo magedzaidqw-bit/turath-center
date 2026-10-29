@@ -7336,12 +7336,21 @@ async function generateWeeklyReport() {
   const memo = memoRes.data || [];
   const beh = behRes.data || [];
 
+  // من أُرسل له التقرير هذا الأسبوع (أسبوع تاريخ النهاية، بدايته الأحد)
+  const _e = new Date(endDate + 'T00:00:00'); _e.setDate(_e.getDate() - _e.getDay());
+  const _ref = ymdLocal(_e); const _sat = new Date(_e); _sat.setDate(_sat.getDate() - 1);
+  let sentSet = new Set();
+  try {
+    const { data: sendRows } = await sb.from('weekly_report_sends').select('student_id,week_start').in('student_id', studentIds).in('week_start', [_ref, ymdLocal(_sat)]);
+    (sendRows || []).forEach(r => { if (r.student_id) sentSet.add(r.student_id); });
+  } catch (e) { sentSet = new Set(); }
+
   let studentData = students.map(s => {
     const sAtt = att.filter(a => a.student_id === s.id);
     const sMemo = memo.filter(m => m.student_id === s.id);
     const sBeh = beh.filter(b => b.student_id === s.id);
     return {
-      id: s.id, name: s.full_name, phone: s.parent_phone||'', circle_id: s.circle_id,
+      id: s.id, name: s.full_name, phone: s.parent_phone||'', circle_id: s.circle_id, sent: sentSet.has(s.id),
       present: sAtt.filter(a => a.status==='present').length,
       absent: sAtt.filter(a => a.status==='absent').length,
       excused: sAtt.filter(a => a.status==='excused').length,
@@ -7363,10 +7372,13 @@ async function generateWeeklyReport() {
     <div class="student-report-row">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
         <div style="font-weight:700">${s.name}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${s.phone ? `<span class="wk-st" data-sid="${s.id}" data-sent="${s.sent ? 1 : 0}" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:800;${s.sent ? 'background:#e3f5e9;color:#1d6b3a;border:1px solid #9dd5b0' : 'background:#fbe4e4;color:#a3262b;border:1px solid #f0b4b4'}">${s.sent ? '✔ تم الإرسال' : '✘ لم يُرسل'}</span>` : ''}
         ${s.phone ? `<button onclick="sendWeeklyWA('${s.phone}','${s.name.replace(/'/g,"\\'")}',${s.present},${s.absent},${s.excused},${s.memoSessions},${s.memoVerses},'${s.memoMastery}','${s.behAvg}','${startDate}','${endDate}','${s.circle_id}','${s.id}')"
           style="padding:5px 12px;background:#25D366;color:white;border:none;border-radius:20px;cursor:pointer;font-size:11px;font-family:'Cairo',sans-serif;font-weight:700">
           📱 إرسال لولي الأمر
         </button>` : '<span style="font-size:11px;color:var(--mid)">لا يوجد هاتف</span>'}
+        </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <span class="badge be">✓ ${s.present} حضور</span>
@@ -7394,10 +7406,28 @@ async function generateWeeklyReport() {
         </div>
       </div>
       <div class="report-section">
+        <div id="wk-sent-bar"></div>
         <h4>🎓 تفاصيل الطلاب — اضغط 📱 لإرسال تقرير ولي الأمر عبر واتساب</h4>
         ${studentsHtml}${absentAllWeek.length ? `<div style="margin-top:10px;font-size:12px;color:var(--mid);background:#fdf6e3;border-radius:10px;padding:8px 12px">ℹ️ لم يُدرج ${absentAllWeek.length} طالب لغيابهم طوال الفترة: ${absentAllWeek.map(x => x.name).join('، ')}</div>` : ''}
       </div>
     </div>`;
+  updateWeeklySentBar();
+}
+
+function updateWeeklySentBar() {
+  const bar = document.getElementById('wk-sent-bar'); if (!bar) return;
+  const els = [...document.querySelectorAll('.wk-st')];
+  const total = els.length, done = els.filter(e => e.dataset.sent === '1').length;
+  const c = !total ? ['#eee', '#666', ''] : done === total ? ['#e3f5e9', '#1d6b3a', '✔'] : done === 0 ? ['#fbe4e4', '#a3262b', '✘'] : ['#fff4dc', '#a66a0c', '⏳'];
+  bar.innerHTML = total ? `<div style="background:${c[0]};color:${c[1]};border:1.5px solid ${c[1]}55;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-weight:800;font-size:13px">${c[2]} تم الإرسال لـ ${done} من ${total} طالب${done === total ? ' — اكتمل التقرير الأسبوعي 🎉' : done === 0 ? ' — لم يُرسل أي تقرير بعد' : ' — متبقٍ ' + (total - done)}</div>` : '';
+}
+function markWeeklySent(studentId) {
+  document.querySelectorAll('.wk-st').forEach(e => {
+    if (e.dataset.sid !== studentId) return;
+    e.dataset.sent = '1'; e.textContent = '✔ تم الإرسال';
+    e.style.background = '#e3f5e9'; e.style.color = '#1d6b3a'; e.style.border = '1px solid #9dd5b0';
+  });
+  updateWeeklySentBar();
 }
 
 function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoVerses, memoMastery, behAvg, startDate, endDate, circleId, studentId) {
@@ -7422,7 +7452,7 @@ function sendWeeklyWA(phone, name, present, absent, excused, memoSessions, memoV
         if (error) {
           console.error('تعذر تسجيل إرسال التقرير الأسبوعي:', error);
           showGlobalError('⚠️ تم فتح واتساب، لكن تعذّر تسجيل حالة الإرسال للمشرف: ' + error.message);
-        }
+        } else if (studentId) markWeeklySent(studentId);
       });
   }
 }
