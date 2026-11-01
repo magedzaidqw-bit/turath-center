@@ -4332,13 +4332,13 @@ async function loadIdeal() {
   try {
     const isSup = CP.role === 'supervisor';
     const now = new Date(); const todayS = ymdLocal(now);
-    // الفترة: الشهر الحالي حتى اليوم، وفي أول 7 أيام من الشهر يُحسب الشهر السابق كاملًا
-    let pStart, pEnd;
-    if (now.getDate() <= 7) { pStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); pEnd = new Date(now.getFullYear(), now.getMonth(), 0); }
-    else { pStart = new Date(now.getFullYear(), now.getMonth(), 1); pEnd = now; }
-    const fromS = ymdLocal(pStart), endS = ymdLocal(pEnd) < todayS ? ymdLocal(pEnd) : todayS;
-    const evFrom = new Date(now); evFrom.setDate(evFrom.getDate() - 62);
-    const sendFrom = new Date(now); sendFrom.setDate(sendFrom.getDate() - 36);
+    // يُحسب دائمًا آخر شهر منتهٍ بالكامل. التقييم يُفتح يوم 28، وللمشرف مهلة 3 أيام بعد انتهاء الشهر
+    const pStart = new Date(now.getFullYear(), now.getMonth() - 1, 1), pEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const fromS = ymdLocal(pStart), endS = ymdLocal(pEnd);
+    const graceEnd = new Date(pEnd); graceEnd.setDate(graceEnd.getDate() + 3); const graceEndS = ymdLocal(graceEnd);
+    const graceOver = todayS > graceEndS;
+    const evFrom = new Date(pStart); evFrom.setDate(evFrom.getDate() + 27);
+    const sendFrom = new Date(pStart); sendFrom.setDate(sendFrom.getDate() - 7);
     const inR = d => d >= fromS && d <= endS;
     const [holis, leaves] = await Promise.all([
       fetchAllRows(() => sb.from('center_holidays').select('id,from_date,to_date,reason')).catch(() => []),
@@ -4356,7 +4356,7 @@ async function loadIdeal() {
       fetchAllRows(() => sb.from('review_log').select('date,recorded_by,student_id').gte('date', fromS)),
       fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,student_id,sent_count,week_start').gte('week_start', ymdLocal(sendFrom))),
       fetchAllRows(() => sb.from('monthly_reports').select('teacher_id,status,month,year').gte('year', now.getFullYear() - 1)),
-      fetchAllRows(() => sb.from('teacher_evaluations').select('teacher_id,evaluator_id,eval_date,total_score').gte('eval_date', ymdLocal(evFrom))),
+      fetchAllRows(() => sb.from('teacher_evaluations').select('teacher_id,evaluator_id,eval_date,total_score').gte('eval_date', ymdLocal(evFrom)).lte('eval_date', graceEndS)),
       fetchAllRows(() => sb.from('supervisor_circles').select('supervisor_id,circle_id')),
       fetchAllRows(() => sb.from('profiles').select('id,full_name,role,activity_excluded').in('role', ['teacher', 'supervisor'])).catch(() => [])
     ]);
@@ -4387,7 +4387,7 @@ async function loadIdeal() {
     const sentN = (t, k) => { let tot = 0; const a = ((sentAcc[t] || {})[k]) || {}; Object.keys(a).forEach(cid => { tot += Math.min(circleN[cid] || Infinity, a[cid].ids.size + a[cid].legacy); }); return tot; };
 
     // التقرير الشهري: آخر شهر استحقاقًا (الحالي من 25، وإلا السابق)
-    const dueDate = now.getDate() >= 25 ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const dueDate = pStart;
     const dueM = dueDate.getMonth() + 1, dueY = dueDate.getFullYear();
     const mrDone = new Set(mrs.filter(r => r.status === 'submitted' && r.month === dueM && r.year === dueY).map(r => r.teacher_id));
 
@@ -4407,10 +4407,11 @@ async function loadIdeal() {
       const mR = mrDone.has(t) ? 1 : 0;
       const eng = 5 * attR + 5 * memoR + 2 * brR + 3 * wkR + 1 * mR + 4 * loadR;
       const e = evBy[t]; const pct = e ? Math.min(1, (e.total_score || 0) / evMax(e.eval_date)) : null;
-      const evMx = e ? evMax(e.eval_date) : evMax(todayS); const evPts = e ? Math.min(evMx, e.total_score || 0) : 0;
+      const evMx = e ? evMax(e.eval_date) : evMax(endS); const evPts = e ? Math.min(evMx, e.total_score || 0) : 0;
       res[t] = { W, N, loadR, id: t, evMx, mx: evMx + 20, name: tName[t], circles: (tCircles[t] || []).map(c => c.name), eng, evPts, hasEval: pct !== null, evPct: pct, total: eng + evPts, ratio: (eng + evPts) / (evMx + 20), attR, memoR, wkR, mR, brR };
     });
-    const rank = ids => ids.map(id => res[id]).filter(Boolean).sort((a, b) => b.ratio - a.ratio || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
+    // بعد انتهاء المهلة: من لم يُقيَّم لا يدخل المنافسة (تقصير المشرف لا يُحسب صفرًا على المحفظ)
+    const rank = ids => ids.map(id => res[id]).filter(x => x && x.hasEval).sort((a, b) => b.ratio - a.ratio || b.eng - a.eng || a.name.localeCompare(b.name, 'ar'));
 
     // المشرفون وطاقمهم
     const supTeachers = {}; sc.forEach(x => { const c = circleOf[x.circle_id]; if (c) (supTeachers[x.supervisor_id] = supTeachers[x.supervisor_id] || new Set()).add(c.teacher_id); });
@@ -4445,10 +4446,18 @@ async function loadIdeal() {
     };
 
     let html = `<div style="font-size:12px;color:var(--mid);margin-bottom:10px">📅 فترة الحساب: من ${fromS} إلى ${endS} (أيام الدوام الأحد–الأربعاء، دون العطل وإجازات المحفظين)</div>`;
-    const anyEval = Object.values(res).some(x => x.hasEval);
-    if (!anyEval) html += `<div class="card" style="border-right:5px solid var(--gold)"><div class="cb" style="font-size:13px">ℹ️ لا توجد تقييمات للمشرفين خلال آخر شهرين، لذلك يظهر الترتيب الآن بحسب درجات التفاعل مع البرنامج فقط (من 20). يكتمل الترتيب تلقائيًا بعد أن يقيّم المشرفون المحفظين (يُفتح التقييم يوم 28).</div></div>`;
-    if (!isSup) html += section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله', rank(teacherIds), 'المحفظ المثالي في المركز');
-    supList.forEach(sv => { html += section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف`, rank(sv.ids), 'المحفظ المثالي — إشراف ' + sv.name); });
+    const prog = ids => { const done = ids.filter(t => res[t] && res[t].hasEval).length; return { done, total: ids.length, complete: done === ids.length, missing: ids.filter(t => res[t] && !res[t].hasEval).map(t => res[t].name) }; };
+    const fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString('ar-KW', { day: 'numeric', month: 'long' });
+    const pending = (title, pr, extra) => `<div class="card" style="border-right:5px solid var(--gold)"><div class="ch"><h3>${title}</h3></div><div class="cb" style="font-size:13px;line-height:2">
+        ⏳ <strong>لم يُعلَن بعد</strong> — تظهر النتيجة بعد اكتمال تقييم المشرف للمحفظين عن شهر ${monthTxt}، أو بعد انتهاء المهلة يوم ${fmtD(graceEndS)}.<br>
+        تم تقييم <strong>${pr.done}</strong> من <strong>${pr.total}</strong> محفظ.${pr.missing.length ? '<br>بانتظار تقييم: ' + pr.missing.map(escapeHtml).join('، ') : ''}${extra || ''}</div></div>`;
+    const allIds = teacherIds, centerPr = prog(allIds);
+    const centerReleased = centerPr.complete || graceOver;
+    if (!isSup) html += centerReleased ? section('👑 المحفظ المثالي للمركز', 'أعلى 3 محفظين على مستوى المركز كله' + (centerPr.complete ? '' : ' — من تم تقييمهم فقط'), rank(allIds), 'المحفظ المثالي في المركز') : pending('👑 المحفظ المثالي للمركز', centerPr);
+    supList.forEach(sv => {
+      const pr = prog(sv.ids); const released = pr.complete || graceOver;
+      html += released ? section('🌟 المحفظون المثاليون — تحت إشراف ' + escapeHtml(sv.name), `${sv.ids.length} محفظ تحت الإشراف` + (pr.complete ? '' : ` — لم يُقيَّم: ${pr.missing.map(escapeHtml).join('، ')} (لا يدخلون المنافسة)`), rank(sv.ids), 'المحفظ المثالي — إشراف ' + sv.name) : pending('🌟 تحت إشراف ' + escapeHtml(sv.name), pr);
+    });
     if (!supList.length && isSup) html += emptyDiv('🧑‍💼', 'لم يتم تعيينك على أي حلقة بعد.');
     if (!isSup) html += `<div class="card"><div class="ch"><h3>🏖️ عطل المركز (تُستثنى من الحساب)</h3></div><div class="cb">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
@@ -4460,14 +4469,14 @@ async function loadIdeal() {
     </div></div>`;
     html += `<div class="card"><div class="ch"><h3>كيف تُحسب الدرجة؟</h3></div><div class="cb" style="font-size:13px;line-height:2">
       <strong>المجموع = تقييم المشرف + درجات البرنامج للتفاعل (20)</strong><br>تقييم شهر أكتوبر: 60 + 20 = 80 · وابتداءً من نوفمبر 2026: 80 + 20 = 100<br>
-      <strong>التفاعل (الشهر الحالي، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط، دون العطل وإجازات المحفظ):</strong><br>
+      <strong>التفاعل (الشهر المنتهي كاملًا، أيام الدوام الأحد–الأربعاء، للحلقات الرسمية فقط، دون العطل وإجازات المحفظ):</strong><br>
       • تسجيل الحضور: 5 درجات (نسبة الطلبة الذين سجّل حضورهم في كل يوم دوام)<br>
       • تسجيل الحفظ: 5 درجات (نسبة الحاضرين الذين سجّل لهم الحفظ)<br>
       • تسجيل السلوك والمراجعة: 2 درجة<br>
       • التقرير الأسبوعي: 3 درجات (نسبة من أُرسل لهم إلى من حضر، بمتوسط الأسابيع المنتهية)<br>
       • التقرير الشهري: درجة واحدة (إن رفعه عن آخر شهر مستحق)<br>
       • حجم الحلقة: 4 درجات (تزيد بزيادة عدد الطلبة حتى 15 طالبًا، تقديرًا لمن يتحمل عددًا أكبر)<br>
-      <strong>تقييم المشرف:</strong> أحدث تقييم أدخله المشرف خلال آخر شهرين، كما أدخله (بدون تحويل). من لم يُقيَّم لا تُحتسب له درجات التقييم.
+      <strong>تقييم المشرف:</strong> تقييم الشهر الذي أدخله المشرف (يُفتح يوم 28 ويُقبل حتى 3 أيام بعد نهاية الشهر)، كما أدخله بدون تحويل.<br><strong>متى تُعلن النتيجة؟</strong> بعد أن يُكمل المشرف تقييم كل محفظيه، أو بعد انتهاء مهلة 3 أيام من نهاية الشهر. ومن لم يُقيَّم بعد المهلة لا يدخل المنافسة. من لم يُقيَّم لا تُحتسب له درجات التقييم.
     </div></div>`;
     root.innerHTML = html;
   } catch (e) {
