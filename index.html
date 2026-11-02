@@ -591,6 +591,8 @@ tbody tr:hover { background:#fbfaf6; }
 /* iPhone: لا يختفي الهيدر وزر القائمة تحت شريط الحالة / الجزيرة الديناميكية */
 .header { box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); height:calc(70px + env(safe-area-inset-top,0px)); }
 @media(max-width:600px){ .header { height:calc(60px + env(safe-area-inset-top,0px)); } .turath-header-actions { top:calc(62px + env(safe-area-inset-top,0px)); } }
+/* تحسين الاستجابة للمس على الآيفون */
+.nb, .btn, .btn-pri, .mc { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 </style>
 </head>
 <body>
@@ -4873,7 +4875,7 @@ async function loadActivity() {
       html += `</div></div>`;
     }
 
-    html += `<div class="card"><div class="ch"><h3>${isSup ? '⭐ تقييمك للمحفظين — ' + monthName : '🧑‍💼 المشرفون — تقييم ' + monthName + ' للمحفظين'}</h3></div><div class="cb"><div class="tw"><table>
+    html += `<div class="card"><div class="ch"><h3>${isSup ? '⭐ تقييمك للمحفظين — ' + monthName : '🧑‍💼 المشرفون — تقييم ' + monthName + ' للمحفظين'}</h3>${isSup ? `<button class="btn btn-g btn-sm" id="sup-start-eval" onclick="goPage('evaluations');setTimeout(function(){openEvalFor('')},150)">⭐ ابدأ التقييم</button>` : ''}</div><div class="cb"><div class="tw"><table>
       <thead><tr><th>المشرف</th><th>الحلقات</th><th>المحفظون تحت إشرافه</th><th>تم تقييمهم</th><th>لم يُقيَّموا</th><th>آخر تقييم</th><th>الحالة</th></tr></thead><tbody>`;
     supRows.forEach(r => {
       html += `<tr><td><strong>${escapeHtml(r.s.full_name)}</strong></td><td>${r.cids.length}</td><td>${r.tset.length}</td>
