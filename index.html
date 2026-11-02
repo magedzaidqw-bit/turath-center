@@ -3330,7 +3330,23 @@ async function printMemoHistory() {
 }
 
 
-function buildPrintHtml(bodyHtml) {
+// شريط أدوات نوافذ الطباعة: رجوع للبرنامج + طباعة + مشاركة (يختفي عند الطباعة)
+function withPrintToolbar(html, shareText) {
+  const sh = JSON.stringify(shareText || '').replace(/</g, '\\u003c');
+  const bar = '<style>.pt-bar{position:sticky;top:0;z-index:9999;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:10px;background:#0a1e12;direction:rtl;font-family:Cairo,Arial,sans-serif}'
+    + '.pt-b{display:inline-block!important;cursor:pointer;padding:9px 18px;border-radius:12px;font-weight:800;font-size:14px;color:#fff;background:#1a5230;border:1.5px solid #c9a227;user-select:none;-webkit-user-select:none}'
+    + '.pt-b.g{background:#25D366;border-color:#25D366}.pt-b.b{background:#c9a227;color:#0a1e12}'
+    + '@media print{.pt-bar{display:none!important}}</style>'
+    + '<div class="pt-bar"><div class="pt-b b" onclick="ptBack()">↩️ رجوع للبرنامج</div><div class="pt-b" onclick="window.print()">🖨️ طباعة</div><div class="pt-b g" onclick="ptShare()">📱 مشاركة</div></div>'
+    + '<script>var PT_SHARE=' + sh + ';'
+    + 'function ptBack(){try{if(window.opener&&!window.opener.closed){window.close();return;}}catch(e){}if(history.length>1){history.back();}else{window.close();}}'
+    + 'function ptGeneric(){var t=[];document.querySelectorAll("h2,h3").forEach(function(h,i){if(i<2)t.push("*"+h.innerText.trim()+"*");});var d=document.querySelector(".print-date");if(d)t.push(d.innerText.trim());document.querySelectorAll("table tr").forEach(function(tr,i){var c=[].map.call(tr.children,function(x){return x.innerText.replace(/\\s+/g," ").trim()}).filter(Boolean);if(c.length&&i>0)t.push(c.join(" | "));});return t.join("\\n");}'
+    + 'function ptShare(){var t=PT_SHARE||ptGeneric();if(navigator.share){navigator.share({text:t}).catch(function(){});}else{window.open("https://wa.me/?text="+encodeURIComponent(t),"_blank");}}'
+    + '<\/script>';
+  return /<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, m => m + bar) : bar + html;
+}
+
+function buildPrintHtml(bodyHtml, shareText) {
   const css =
       '*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}'
     + 'body{font-family:"Cairo",Arial,sans-serif;direction:rtl;margin:0;padding:0;color:#111;font-size:13px;background:white;line-height:1.7}'
@@ -3361,15 +3377,16 @@ function buildPrintHtml(bodyHtml) {
     + 'button,.btn,a[onclick]{display:none!important}'
     + '@page{size:A4;margin:15mm 18mm}'
     + '@media print{body{padding:0}}';
-  return '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
+  return withPrintToolbar('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
     + '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">'
-    + '<style>' + css + '</style></head><body>' + bodyHtml + '</body></html>';
+    + '<style>' + css + '</style></head><body>' + bodyHtml + '</body></html>', shareText);
 }
 
 function openPrintWindow() {
   const printArea = document.getElementById('print-area');
   if (!printArea) return;
-  const html = buildPrintHtml(printArea.innerHTML);
+  const _sh = window._printShare; window._printShare = null;
+  const html = buildPrintHtml(printArea.innerHTML, _sh);
 
   // المحاولة الأولى: نافذة منفصلة (تعمل بشكل جيد على الحاسوب)
   const printWin = window.open('', '_blank');
@@ -4199,6 +4216,7 @@ function arDateNow() {
 }
 // يفتح مستنداً كاملاً مستقلاً للطباعة وينتظر تحميل الصور والخط قبل فتح نافذة الطباعة
 function printStandalone(html) {
+  html = withPrintToolbar(html);
   const go = (win) => {
     const imgsReady = () => {
       const imgs = Array.from(win.document.images || []);
@@ -5293,6 +5311,8 @@ async function printAllEvalCards() {
         }).join('')}
       </tbody>
     </table>`;
+    window._printShare = [`*${document.getElementById('print-title').textContent}*`, (CP.role === 'supervisor' ? `كشف تقييم المشرف: ${CP.full_name||''}` : ''), '']
+    .concat(sorted.map((e,i) => `${i+1}. ${(e.teacher&&e.teacher.full_name)||'—'} — ${e.total_score||0}/${evMax(e.eval_date)} (${evGrade(e.total_score, e.eval_date)})`)).filter((x,i)=>x!==''||i===2).join('\n') + '\n\nبارك الله في جهودكم 🌿';
   openPrintWindow();
 }
 
@@ -6630,7 +6650,7 @@ function printDonorReport(donorName) {
 
   const printWin = window.open('', '_blank');
   if (!printWin) { alert('يرجى السماح بفتح النوافذ المنبثقة'); return; }
-  printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير ${String(donorName||'').replace(/[<>&]/g,'')} - ${monthName}</title>
+  printWin.document.write(withPrintToolbar(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير ${String(donorName||'').replace(/[<>&]/g,'')} - ${monthName}</title>
     <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
       *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
@@ -6701,7 +6721,7 @@ function printDonorReport(donorName) {
       <div style="font-size:12px;color:rgba(255,255,255,0.7)">مركز التراث لتحفيظ القرآن الكريم — فرع الجهراء</div>
     </div>
 
-  </body></html>`);
+  </body></html>`));
   printWin.document.close();
   setTimeout(function(){ printWin.focus(); printWin.print(); }, 900);
 }
