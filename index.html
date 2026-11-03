@@ -3016,6 +3016,12 @@ async function saveStudent() {
     return;
   }
 
+  // حد الحلقة: 15 طالبًا كحد أقصى (الفحص النهائي في قاعدة البيانات، وهذا لإظهار رسالة واضحة قبل إنشاء حساب ولي الأمر)
+  if (targetCircle) {
+    const { count: _cn } = await sb.from('students').select('id', { count: 'exact', head: true }).eq('circle_id', targetCircle);
+    if ((_cn || 0) >= 15) { alert('⛔ هذه الحلقة مكتملة (' + _cn + ' طالبًا). الحد الأقصى 15 طالبًا في الحلقة الواحدة، اختر حلقة أخرى.'); return; }
+  }
+
   let parentId = null, parentWarn = '';
   if (parentPhone) {
     const r = await ensureParentAccount(parentPhone, parentPass, parentName, name);
