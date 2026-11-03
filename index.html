@@ -4380,7 +4380,7 @@ async function loadIdeal() {
       fetchAllRows(() => sb.from('review_log').select('date,recorded_by,student_id').gte('date', fromS)),
       fetchAllRows(() => sb.from('weekly_report_sends').select('teacher_id,circle_id,student_id,sent_count,week_start').gte('week_start', ymdLocal(sendFrom))),
       fetchAllRows(() => sb.from('monthly_reports').select('teacher_id,status,month,year').gte('year', now.getFullYear() - 1)),
-      fetchAllRows(() => sb.from('teacher_evaluations').select('teacher_id,evaluator_id,eval_date,total_score').gte('eval_date', ymdLocal(evFrom)).lte('eval_date', graceEndS)),
+      fetchAllRows(() => sb.from('teacher_evaluations').select('teacher_id,evaluator_id,eval_date,total_score').gte('eval_date', fromS).lte('eval_date', endS)),
       fetchAllRows(() => sb.from('supervisor_circles').select('supervisor_id,circle_id')),
       fetchAllRows(() => sb.from('profiles').select('id,full_name,role,activity_excluded').in('role', ['teacher', 'supervisor'])).catch(() => [])
     ]);
