@@ -1358,6 +1358,7 @@ function buildPages() {
       <div class="sc" style="border-color:#14568f"><div class="si" style="background:#e0eefb">🕌</div><div><div class="sn" id="st3">—</div><div class="sl">حلقة</div></div></div>
       <div class="sc" style="border-color:#a3262b"><div class="si" style="background:#fbe4e4">📅</div><div><div class="sn" id="st4">—</div><div class="sl">حضور اليوم</div></div></div>
     </div>
+    <div id="dash-extra" style="margin-bottom:16px"></div>
     <div class="card"><div class="ch"><h3>📋 آخر سجلات الحفظ</h3></div>
       <div class="cb"><div class="tw"><table><thead><tr><th>الطالب</th><th>من</th><th>إلى</th><th>الإتقان</th><th>التاريخ</th></tr></thead><tbody id="dash-memo"></tbody></table></div></div>
     </div>
@@ -2238,6 +2239,80 @@ async function loadDash() {
   const m = mRes.data;
   b.innerHTML = m?.length ? m.map(r=>`<tr><td>${r.students?.full_name||'—'}</td><td>${r.surah_from}</td><td>${r.surah_to}</td><td>${mb(r.mastery)}</td><td>${r.date}</td></tr>`).join('') : emptyRow(5,'لا توجد سجلات');
   } catch(e) { showGlobalError('تعذر تحميل لوحة التحكم — تحقق من الاتصال بالإنترنت'); }
+  loadDashExtra();
+}
+// ===== لوحة المدير: ما يحتاج انتباهك + حضور آخر يوم دوام + حلقاتي =====
+async function loadDashExtra() {
+  const box = document.getElementById('dash-extra'); if (!box) return;
+  box.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ تحليل البيانات...</p></div>';
+  try {
+    const now = new Date(), todayS = ymdLocal(now);
+    const d14 = new Date(); d14.setDate(d14.getDate() - 14); const from14 = ymdLocal(d14);
+    const [cRes, studs, att, mrRes, pmRes] = await Promise.all([
+      sb.from('circles').select('id,name,teacher_name,is_official'),
+      fetchAllRows(() => sb.from('students').select('id,circle_id')),
+      fetchAllRows(() => sb.from('attendance').select('student_id,date,status').gte('date', from14).lte('date', todayS)),
+      sb.from('monthly_reports').select('circle_id,status').eq('month', now.getMonth() + 1).eq('year', now.getFullYear()),
+      sb.from('notifications').select('id', { count: 'exact', head: true }).eq('to_user_id', CU.id).eq('type', 'parent_note').eq('is_read', false)
+    ]);
+    const circles = (cRes.data || []).filter(c => c.is_official !== false);
+    const stuCircle = {}, n = {};
+    studs.forEach(x => { stuCircle[x.id] = x.circle_id; n[x.circle_id] = (n[x.circle_id] || 0) + 1; });
+    // الحضور لكل حلقة
+    const last = {}, w = {};
+    const from7 = ymdLocal(new Date(Date.now() - 7 * 86400000));
+    let lastDay = '';
+    att.forEach(a => {
+      const cid = stuCircle[a.student_id]; if (!cid) return;
+      if (!last[cid] || a.date > last[cid]) last[cid] = a.date;
+      if (a.date > lastDay) lastDay = a.date;
+      if (a.date >= from7) { const o = (w[cid] = w[cid] || { p: 0, t: 0 }); if (['present','absent','excused'].includes(a.status)) { o.t++; if (a.status === 'present') o.p++; } }
+    });
+    // آخر يوم دوام
+    let ld = { p: 0, a: 0, e: 0 };
+    att.forEach(a => { if (a.date !== lastDay || !stuCircle[a.student_id]) return; if (a.status === 'present') ld.p++; else if (a.status === 'absent') ld.a++; else if (a.status === 'excused') ld.e++; });
+    const ldT = ld.p + ld.a + ld.e, ldPct = ldT ? Math.round(ld.p / ldT * 100) : 0;
+    // ما يحتاج انتباه
+    const items = [];
+    const over = circles.filter(c => (n[c.id] || 0) > 15).sort((a, b) => (n[b.id] || 0) - (n[a.id] || 0));
+    if (over.length) items.push({ ic: '🚨', col: '#a3262b', t: `${over.length} حلقة تجاوزت 15 طالبًا`, d: over.map(c => `${escapeHtml(c.name.replace(/^حلقة\s*/, ''))} (${n[c.id]})`).join(' · '), go: 'circles' });
+    const noAtt = circles.filter(c => (n[c.id] || 0) > 0 && (!last[c.id] || relDays(last[c.id]) >= 5));
+    if (noAtt.length) items.push({ ic: '📅', col: '#c46a00', t: `${noAtt.length} حلقة لم تسجّل حضورًا منذ 5 أيام أو أكثر`, d: noAtt.map(c => escapeHtml(c.name.replace(/^حلقة\s*/, '')) + (c.teacher_name ? ' — ' + escapeHtml(c.teacher_name) : '')).join(' · '), go: 'sup-home' });
+    if (now.getDate() >= 25) {
+      const done = new Set((mrRes.data || []).filter(r => r.status === 'submitted').map(r => r.circle_id));
+      const miss = circles.filter(c => (n[c.id] || 0) > 0 && !done.has(c.id));
+      if (miss.length) items.push({ ic: '📝', col: '#14568f', t: `${miss.length} حلقة لم ترفع التقرير الشهري بعد`, d: miss.map(c => escapeHtml(c.name.replace(/^حلقة\s*/, ''))).join(' · '), go: 'sup-home' });
+    }
+    const unread = pmRes.count || 0;
+    if (unread) items.push({ ic: '✉️', col: '#6a3d9a', t: `${unread} رسالة من أولياء الأمور غير مقروءة`, d: '', go: 'parent-messages' });
+    const attnHtml = items.length ? items.map(i => `<div onclick="goPage('${i.go}')" style="cursor:pointer;display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #eee;border-right:5px solid ${i.col};border-radius:12px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:22px">${i.ic}</div><div style="flex:1;min-width:0"><div style="font-weight:800;color:${i.col};font-size:14px">${i.t}</div>${i.d ? `<div style="font-size:12px;color:#666;margin-top:3px;line-height:1.7">${i.d}</div>` : ''}</div><div style="color:#999;font-size:18px">‹</div></div>`).join('')
+      : '<div style="background:#eaf6ee;border:1px solid #bfe3c9;border-radius:12px;padding:14px;color:#1d6b3a;font-weight:700">✅ لا شيء يحتاج انتباهك الآن</div>';
+    // بطاقات الحلقات
+    const cards = circles.filter(c => (n[c.id] || 0) > 0).sort((a, b) => (n[b.id] || 0) - (n[a.id] || 0)).map(c => {
+      const cnt = n[c.id] || 0, pct = Math.min(100, Math.round(cnt / 15 * 100));
+      const col = cnt > 15 ? '#a3262b' : cnt === 15 ? '#c46a00' : cnt >= 12 ? '#b8932f' : '#1d6b3a';
+      const ap = w[c.id] && w[c.id].t ? Math.round(w[c.id].p / w[c.id].t * 100) : null;
+      const apCol = ap === null ? '#999' : ap >= 85 ? '#1d6b3a' : ap >= 70 ? '#b8932f' : '#a3262b';
+      return `<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:10px 12px">
+        <div style="font-weight:800;font-size:13px;color:var(--gd)">${escapeHtml(c.name)}</div>
+        <div style="font-size:11px;color:#777;margin-bottom:6px">${escapeHtml(c.teacher_name || '—')}</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>الطلاب</span><strong style="color:${col}">${cnt} / 15</strong></div>
+        <div style="height:7px;background:#eee;border-radius:5px;overflow:hidden;margin-bottom:6px"><div style="height:100%;width:${pct}%;background:${col}"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span>الحضور (7 أيام)</span><strong style="color:${apCol}">${ap === null ? '—' : ap + '%'}</strong></div></div>`;
+    }).join('');
+    const dayLbl = lastDay ? (lastDay === todayS ? 'اليوم' : lastDay) : '—';
+    box.innerHTML = `
+      <div class="card" style="margin-bottom:14px"><div class="ch"><h3>⚠️ يحتاج انتباهك الآن</h3></div><div class="cb">${attnHtml}</div></div>
+      <div class="card" style="margin-bottom:14px"><div class="ch"><h3>📅 الحضور في آخر يوم دوام (${dayLbl})</h3></div><div class="cb">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <div style="font-size:34px;font-weight:900;color:${ldPct >= 85 ? '#1d6b3a' : ldPct >= 70 ? '#b8932f' : '#a3262b'}">${ldT ? ldPct + '%' : '—'}</div>
+          <div style="font-size:13px;line-height:2">✔ حاضر: <b>${ld.p}</b> &nbsp; ✖ غائب: <b>${ld.a}</b> &nbsp; ◐ بعذر: <b>${ld.e}</b></div></div></div></div>
+      <div class="card" style="margin-bottom:14px"><div class="ch"><h3>🕌 الحلقات: العدد والحضور</h3></div><div class="cb">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px">${cards || '<div class="empty"><p>لا توجد بيانات</p></div>'}</div></div></div>`;
+  } catch (e) {
+    box.innerHTML = '<div class="empty"><p>تعذر تحميل ملخص الانتباه: ' + escapeHtml(e.message || '') + '</p></div>';
+  }
 }
 function emptyRow(cols,msg){ return `<tr><td colspan="${cols}"><div class="empty"><div class="ei">📭</div><p>${msg}</p></div></td></tr>`; }
 
