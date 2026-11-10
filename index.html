@@ -4535,6 +4535,42 @@ function waNum(phone) {
   if (n.length === 8) n = '965' + n;
   return n;
 }
+// رسالة حرّة من المشرف/الإدارة إلى محفظ (من إنشائه) عبر واتساب
+function openMsgTeacher(id) {
+  const t = (window._waTeachers || {})[id]; if (!t) return;
+  closeMsgTeacher();
+  const greet = 'السلام عليكم ورحمة الله وبركاته\nأخي الفاضل ' + t.name + '،\n';
+  const tpl = {
+    'شكر': greet + 'نشكر لكم جهودكم المباركة مع الطلاب في الحلقة، وجزاكم الله خيرًا ونفع بكم 🌿',
+    'استفسار': greet + 'أرجو إفادتي بخصوص: ',
+    'تذكير': greet + 'تذكير لطيف بـ: ',
+    'تهنئة': greet + 'نبارك لكم ونسأل الله لكم التوفيق والسداد 🤍'
+  };
+  const d = document.createElement('div');
+  d.id = 'msg-teacher-ov';
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:14px';
+  d.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:460px;width:100%;max-height:92vh;overflow:auto;padding:18px;direction:rtl;font-family:'Cairo',sans-serif">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong style="font-size:15px">✉️ رسالة إلى ${escapeHtml(t.name)}</strong><button onclick="closeMsgTeacher()" style="border:none;background:none;font-size:20px;cursor:pointer">✕</button></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${Object.keys(tpl).map(k => `<button type="button" data-k="${k}" style="border:1px solid #c9b872;background:#fffaf0;border-radius:14px;padding:3px 12px;font-size:12px;cursor:pointer;font-family:inherit">${k}</button>`).join('')}</div>
+    <textarea id="msg-teacher-text" rows="7" style="width:100%;box-sizing:border-box;border:1.5px solid #ddd;border-radius:10px;padding:10px;font-family:inherit;font-size:14px;line-height:1.8" placeholder="اكتب رسالتك هنا..."></textarea>
+    <div style="font-size:11px;color:#777;margin:6px 0 12px">يُضاف في آخر الرسالة: «مركز التراث لتحفيظ القرآن الكريم». ${t.phone ? '' : 'لا يوجد رقم للمحفظ، سيفتح واتساب لتختار جهة الاتصال.'}</div>
+    <div style="display:flex;gap:8px"><button class="btn btn-sm" style="flex:1;background:#25D366;color:#fff;border:none;border-radius:12px;padding:10px;font-weight:700;cursor:pointer;font-family:inherit" onclick="sendMsgTeacher('${id}')">📱 إرسال عبر واتساب</button>
+    <button class="btn btn-sm" style="border:1px solid #ccc;background:#fff;border-radius:12px;padding:10px 16px;cursor:pointer;font-family:inherit" onclick="closeMsgTeacher()">رجوع</button></div></div>`;
+  document.body.appendChild(d);
+  const ta = d.querySelector('#msg-teacher-text');
+  ta.value = greet;
+  d.querySelectorAll('button[data-k]').forEach(b => b.onclick = () => { ta.value = tpl[b.dataset.k]; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); });
+  d.addEventListener('click', e => { if (e.target === d) closeMsgTeacher(); });
+  setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 50);
+}
+function closeMsgTeacher() { const o = document.getElementById('msg-teacher-ov'); if (o) o.remove(); }
+function sendMsgTeacher(id) {
+  const t = (window._waTeachers || {})[id]; if (!t) return;
+  const txt = (document.getElementById('msg-teacher-text').value || '').trim();
+  if (!txt) { alert('اكتب نص الرسالة أولًا'); return; }
+  window.open('https://wa.me/' + (t.phone || '') + '?text=' + encodeURIComponent(txt + '\n\nمركز التراث لتحفيظ القرآن الكريم'), '_blank');
+  closeMsgTeacher();
+}
 function waTeacher(id) {
   const m = (window._waMsgs || {})[id]; if (!m) return;
   window.open('https://wa.me/' + (m.phone || '') + '?text=' + encodeURIComponent(m.text), '_blank');
@@ -4738,9 +4774,12 @@ async function loadActivity() {
 
     // ===== زر واتساب لكل محفظ مقصّر: رسالة جاهزة بما ينقصه =====
     window._waMsgs = {};
+    window._waTeachers = {};
     const waBtnFor = r => {
       const ph = String((r.t.phone || '')).replace(/\D/g, '');
-      if (['leave','off','none'].includes(r.level)) return '';
+      window._waTeachers[r.t.id] = { phone: !ph ? '' : (ph.length === 8 ? '965' + ph : ph.replace(/^0+/, '')), name: r.t.full_name };
+      const msgBtn = ` <button class="btn btn-sm" onclick="openMsgTeacher('${r.t.id}')" style="background:#fff;color:#128C7E;border:1.5px solid #25D366;border-radius:14px;padding:2px 10px;font-size:11px;cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700">✉️ رسالة</button>`;
+      if (['leave','off','none'].includes(r.level)) return msgBtn;
       const L = [];
       if (r.level === 'bad') L.push(`• لم تسجّل حضورًا ولا حفظًا خلال ${periodLabel}.`);
       else if (r.level === 'mid') L.push(`• تسجيلك ناقص خلال ${periodLabel}: ${r.a.attDays.size === 0 ? 'لم تسجّل الحضور' : 'لم تسجّل الحفظ'}.`);
@@ -4751,10 +4790,10 @@ async function loadActivity() {
         if (Dw > 0 && nw < Dw) L.push(`• التقرير الأسبوعي (من ${w.label}): ${nw === 0 ? 'لم يُرسل' : 'أُرسل لـ ' + nw + ' طالب فقط'} من أصل ${Dw} طالب حضروا.`);
       });
       if (now.getDate() >= 25 && r.mr !== 'submitted') L.push(`• تقرير ${monthName} الشهري: ${r.mr ? 'مسوّدة لم تُرسل بعد' : 'لم يُرفع بعد'}.`);
-      if (!L.length) return '';
+      if (!L.length) return msgBtn;
       const phone = !ph ? '' : (ph.length === 8 ? '965' + ph : ph.replace(/^0+/, '')); // بلا رقم: يفتح واتساب لاختيار جهة الاتصال
       window._waMsgs[r.t.id] = { phone, text: `السلام عليكم ورحمة الله وبركاته\nأخي الفاضل ${r.t.full_name}،\nمتابعة من إدارة المركز، نلاحظ الآتي:\n${L.join('\n')}\n\nنرجو استكمالها، وجزاكم الله خيرًا 🌿\nمركز التراث لتحفيظ القرآن الكريم` };
-      return ` <button class="btn btn-sm" onclick="waTeacher('${r.t.id}')" style="background:#25D366;color:#fff;border:none;border-radius:14px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700">📱 واتساب</button>`;
+      return ` <button class="btn btn-sm" onclick="waTeacher('${r.t.id}')" style="background:#25D366;color:#fff;border:none;border-radius:14px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700">📱 واتساب</button>` + msgBtn;
     };
 
     let html = periodNoticeHtml() + `<div class="cp-head"><div>
