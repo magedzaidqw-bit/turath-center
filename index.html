@@ -3019,6 +3019,7 @@ async function ensureParentAccount(phone, pass, name, studentName) {
   let uid = null;
   const { data: su, error: suErr } = await iso.auth.signUp({ email, password: pw });
   if (!suErr && su?.user && su.user.identities && su.user.identities.length) uid = su.user.id;
+  if (suErr && /weak|easy to guess|known/i.test(suErr.message || '')) return { error: 'كلمة المرور الافتراضية (رقم الجوال) مرفوضة لأنها ضعيفة. اكتب كلمة مرور أخرى في خانة «كلمة مرور ولي الأمر» (مثل رقم الجوال مع حروف) ثم احفظ من جديد.' };
   if (!uid) {
     // الحساب موجود بلا ملف (حالة قديمة): نحاول الدخول به لإكمال الملف
     const { data: si, error: siErr } = await iso.auth.signInWithPassword({ email, password: pw });
