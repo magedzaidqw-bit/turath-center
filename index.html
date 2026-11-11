@@ -93,10 +93,11 @@ body {
   display:none; position:fixed; top:0; right:0; bottom:0; left:0; z-index:900;
   width:100%; width:100vw;
   background:linear-gradient(165deg,var(--gd),#0a1f13);
-  align-items:center; justify-content:center; padding:24px;
+  align-items:flex-start; justify-content:center; padding:24px;
   overflow-y:auto;
 }
 .auth-card {
+  margin:auto; /* يتوسّط عند اتساع الشاشة ولا يُقصّ من الأعلى عند ضيقها */
   background:var(--cream); border-radius:24px; padding:44px 36px;
   width:100%; max-width:420px; box-shadow:var(--shadow-lg);
   border:1px solid rgba(201,161,83,0.2);
