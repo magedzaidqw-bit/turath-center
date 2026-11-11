@@ -3031,8 +3031,12 @@ async function ensureParentAccount(phone, pass, name, studentName) {
 }
 
 async function saveStudent() {
-  const name=v('s-name'), circle=v('s-circle'), civilId=v('s-civilid'), birth=v('s-birth');
-  const parentPhone=v('s-parent-phone'), parentPass=v('s-parent-pass');
+  let circle=v('s-circle'); const name=v('s-name'), civilId=v('s-civilid'), birth=v('s-birth');
+  // توحيد رقم ولي الأمر إلى 8 أرقام (يزيل +965 والمسافات)، لأن حساب الدخول يُبنى منه
+  let parentPhone=v('s-parent-phone').replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660)).replace(/\D/g,'');
+  if (parentPhone.startsWith('00965')) parentPhone = parentPhone.slice(5); else if (parentPhone.startsWith('965') && parentPhone.length === 11) parentPhone = parentPhone.slice(3);
+  const parentPass=v('s-parent-pass');
+  if (parentPhone && parentPhone.length !== 8) { alert('⚠️ رقم جوال ولي الأمر يجب أن يكون 8 أرقام (مثال: 97930088)'); return; }
   const parentName=v('s-parent-name'), parentCivilId=v('s-parent-civilid'), parentRelation=v('s-parent-relation');
   const schoolLevel=v('s-school-level'), schoolType=v('s-school-type'), area=v('s-area');
   const currentLevel=v('s-current-level');
@@ -3041,6 +3045,11 @@ async function saveStudent() {
   if (editingStudentId) {
     // حماية إضافية: نمنع الحفظ إذا صارت الحلقة فارغة بالخطأ أثناء تعديل طالب كان له حلقة أصلاً
     const currentStudent = (window._studentsCache||[]).find(x=>x.id===editingStudentId);
+    // إن كانت خانة الحلقة فارغة نأخذ الحلقة الحالية من القاعدة مباشرة حتى لا تُمسح بالخطأ
+    if (!circle) {
+      const { data: cur } = await sb.from('students').select('circle_id').eq('id', editingStudentId).single();
+      if (cur && cur.circle_id) { circle = cur.circle_id; }
+    }
     if (currentStudent && currentStudent.circle_id && !circle) {
       const confirmClear = confirm('⚠️ لم يتم تحديد أي حلقة لهذا الطالب! سيؤدي المتابعة إلى إزالته من حلقته الحالية بالكامل.\n\nهل تريد إزالة الطالب من حلقته فعلًا؟ (اضغط "إلغاء" ثم اختر الحلقة الصحيحة إذا كان هذا غير مقصود)');
       if (!confirmClear) return;
