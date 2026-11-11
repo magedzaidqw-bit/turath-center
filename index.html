@@ -4938,10 +4938,10 @@ async function loadActivity() {
     rows.forEach(r => {
       html += `<tr>
         <td><strong>${escapeHtml(r.t.full_name)}</strong>${waBtnFor(r)}</td>
-        <td>${r.circ.map(c => `<div style="margin-bottom:4px">${escapeHtml(c.name)} <button class="btn btn-o btn-sm" onclick="openMemoProgress('${c.id}')" style="padding:2px 8px;font-size:11px;white-space:nowrap">📖 تقدّم الحفظ</button></div>`).join('')}</td>
+        <td>${r.circ.map(c => escapeHtml(c.name)).join('، ')}</td>
         <td>${r.students}${r.newS ? ` <span class="badge badge-green">+${r.newS} جديد</span>` : ''}${r.students === 0 ? ' <span class="badge badge-red">لم يضف طلابًا</span>' : ''}</td>
         <td style="white-space:nowrap">${r.a.attDays.size ? `<span style="color:#1d6b3a;font-weight:700">✔ ${r.a.pres}</span> &nbsp; <span style="color:#a3262b;font-weight:700">✘ ${r.a.abs}</span>${r.a.exc ? ` &nbsp; <span style="color:#c9962e;font-weight:700">~ ${r.a.exc}</span>` : ''}<div style="font-size:10px;color:var(--mid)">${r.a.attDays.size}${r.W > 0 ? ' من ' + r.W : ''} يوم مسجّل</div>` : '<span style="color:#a3262b">لم يسجّل</span>'}</td>
-        <td>${r.a.memo || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.rev || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.beh || '<span style="color:#a3262b">0</span>'}</td>
+        <td>${r.a.memo || '<span style="color:#a3262b">0</span>'}<div style="margin-top:4px">${r.circ.map(c => `<button class="btn btn-o btn-sm" onclick="openMemoProgress('${c.id}')" style="padding:2px 8px;font-size:11px;white-space:nowrap;margin-bottom:3px" title="${escapeHtml(c.name)}">📖 التفاصيل${r.circ.length > 1 ? ' — ' + escapeHtml(c.name.replace(/^حلقة\s*/, '')) : ''}</button>`).join('')}</div></td><td>${r.a.rev || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.beh || '<span style="color:#a3262b">0</span>'}</td>
         <td style="text-align:center;white-space:nowrap">${r.mr === 'submitted' ? '<span class="badge badge-green">✅ أُرسل</span>' : r.mr ? '<span class="badge badge-yellow">📝 مسوّدة</span>' : (now.getDate() < 25 ? '<span class="badge bg">⏳ لم يُرسل</span>' : '<span class="badge badge-red">❌ لم يُرسل</span>')}</td>
         <td style="white-space:nowrap">${relLabel(r.a.last)}</td>
         <td>${badge(r.level)}</td>
