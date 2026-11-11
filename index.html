@@ -2335,7 +2335,6 @@ async function loadCircles() {
     <td>${c.location||'—'}</td>
     <td><span class="badge be">${cnt[c.id]||0} طالب</span></td>
     <td>
-      <button class="btn btn-o btn-sm" onclick="openMemoProgress('${c.id}')">📖 تقدّم الحفظ</button>
       <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}','${c.is_official === false ? '0' : '1'}')">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delCircle('${c.id}')">حذف</button>
     </td></tr>`).join('') : emptyRow(7,'لا توجد حلقات — تأكد من الاتصال بقاعدة البيانات');
@@ -4939,7 +4938,7 @@ async function loadActivity() {
     rows.forEach(r => {
       html += `<tr>
         <td><strong>${escapeHtml(r.t.full_name)}</strong>${waBtnFor(r)}</td>
-        <td>${r.circ.map(c => escapeHtml(c.name)).join('، ')}</td>
+        <td>${r.circ.map(c => `<div style="margin-bottom:4px">${escapeHtml(c.name)} <button class="btn btn-o btn-sm" onclick="openMemoProgress('${c.id}')" style="padding:2px 8px;font-size:11px;white-space:nowrap">📖 تقدّم الحفظ</button></div>`).join('')}</td>
         <td>${r.students}${r.newS ? ` <span class="badge badge-green">+${r.newS} جديد</span>` : ''}${r.students === 0 ? ' <span class="badge badge-red">لم يضف طلابًا</span>' : ''}</td>
         <td style="white-space:nowrap">${r.a.attDays.size ? `<span style="color:#1d6b3a;font-weight:700">✔ ${r.a.pres}</span> &nbsp; <span style="color:#a3262b;font-weight:700">✘ ${r.a.abs}</span>${r.a.exc ? ` &nbsp; <span style="color:#c9962e;font-weight:700">~ ${r.a.exc}</span>` : ''}<div style="font-size:10px;color:var(--mid)">${r.a.attDays.size}${r.W > 0 ? ' من ' + r.W : ''} يوم مسجّل</div>` : '<span style="color:#a3262b">لم يسجّل</span>'}</td>
         <td>${r.a.memo || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.rev || '<span style="color:#a3262b">0</span>'}</td><td>${r.a.beh || '<span style="color:#a3262b">0</span>'}</td>
