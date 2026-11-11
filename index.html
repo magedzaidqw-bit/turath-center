@@ -6319,7 +6319,7 @@ async function loadSupHome() {
               <th>المحفظ</th>
               <th>الطلاب</th>
               <th>نسبة الحضور</th>
-              <th>متوسط الحفظ</th>
+              <th>تقدّم الحفظ</th>
               <th>متوسط السلوك</th>
               <th>التقييم الكلي</th>
               <th>التقرير الأسبوعي</th>
@@ -6338,7 +6338,7 @@ async function loadSupHome() {
                   <span class="badge ${attColor}">${s.attRate}%</span>
                   <div class="sb" style="margin-top:4px;width:80px"><div class="sf" style="width:${s.attRate}%"></div></div>
                 </td>
-                <td><strong>${s.memoAvg}</strong>/5</td>
+                <td><button class="btn btn-o btn-sm" onclick="openMemoProgress('${s.circle.id}')">📖 عرض التقدّم</button></td>
                 <td><strong>${s.behAvg}</strong>/5</td>
                 <td><strong style="color:var(--gd)">${total}/15</strong></td>
                 <td>${(() => {
@@ -8146,6 +8146,50 @@ async function printMonthlyReport(reportId, teacherName, month, year) {
     </div>` : ''}`;
 
   openPrintWindow();
+}
+
+// ===== تقدّم الحفظ لكل طالب (للمشرف): أين بدأ، وأين وصل، وكم حفظ =====
+const MEMO_WEEKLY_MIN = 10; // أقل عدد آيات مقبول في الأسبوع قبل التنبيه
+async function openMemoProgress(circleId, period) {
+  period = period || 'week';
+  const days = period === 'month' ? 30 : 7;
+  const minV = period === 'month' ? MEMO_WEEKLY_MIN * 4 : MEMO_WEEKLY_MIN;
+  const from = ymdLocal(new Date(Date.now() - days * 86400000));
+  document.getElementById('report-view-title').textContent = '📖 تقدّم الحفظ';
+  document.getElementById('report-view-body').innerHTML = '<div class="empty"><div class="ei">⏳</div><p>جارٍ التحميل...</p></div>';
+  openM('m-report-view');
+  const [{ data: circle }, { data: students }] = await Promise.all([
+    sb.from('circles').select('name,teacher_name').eq('id', circleId).single(),
+    sb.from('students').select('id,full_name').eq('circle_id', circleId).order('full_name')
+  ]);
+  const ids = (students || []).map(x => x.id);
+  const { data: logs } = ids.length
+    ? await sb.from('memorization_log').select('student_id,date,surah_from,ayah_from,surah_to,ayah_to,verses_count,mastery').in('student_id', ids).gte('date', from).order('date', { ascending: true })
+    : { data: [] };
+  const word = v => v >= 4.75 ? 'ممتاز' : v >= 4.25 ? 'جيد جداً' : v >= 3 ? 'جيد' : 'يحتاج مراجعة';
+  const rows = (students || []).map(st => {
+    const l = (logs || []).filter(x => x.student_id === st.id);
+    if (!l.length) return { name: st.full_name, none: true, verses: 0 };
+    const first = l[0], last = l[l.length - 1];
+    const avg = l.reduce((t, m) => t + gradeFromMastery(m.mastery), 0) / l.length;
+    return { name: st.full_name, none: false, verses: uniqueVerses(l), from: `${first.surah_from} (${first.ayah_from || 1})`, to: `${last.surah_to} (${last.ayah_to || 1})`, mastery: word(avg), sessions: l.length };
+  });
+  rows.sort((a, b) => (a.verses < minV ? 0 : 1) - (b.verses < minV ? 0 : 1) || a.verses - b.verses);
+  const low = rows.filter(r => r.verses < minV).length;
+  const tab = (p, t) => `<button class="btn ${period === p ? 'btn-gold' : 'btn-o'} btn-sm" onclick="openMemoProgress('${circleId}','${p}')">${t}</button>`;
+  document.getElementById('report-view-title').textContent = `📖 تقدّم الحفظ — ${circle?.name || ''}`;
+  document.getElementById('report-view-body').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">${tab('week', 'آخر أسبوع')}${tab('month', 'آخر شهر')}</div>
+    <div style="font-size:12px;color:var(--mid);margin-bottom:12px">${circle?.teacher_name ? 'الشيخ ' + escapeHtml(circle.teacher_name) + ' — ' : ''}يظهر التنبيه 🔴 لمن حفظ أقل من ${minV} آيات في هذه الفترة${low ? ` (${low} طالب)` : ''}</div>
+    ${rows.map(r => `<div class="student-report-row" style="${r.verses < minV ? 'background:#fdf0ee;border-radius:10px;padding:8px 10px' : ''}">
+      <div style="font-weight:700;min-width:140px">${r.verses < minV ? '🔴 ' : ''}${escapeHtml(r.name)}</div>
+      ${r.none ? '<div style="color:#a3262b;font-weight:700">لا يوجد حفظ مسجّل في هذه الفترة</div>' : `<div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="badge bg">بدأ من: ${escapeHtml(r.from)}</span>
+        <span class="badge be">وصل إلى: ${escapeHtml(r.to)}</span>
+        <span class="badge bp">📖 حفظ ${r.verses} آية</span>
+        <span class="badge br">الإتقان: ${r.mastery}</span>
+      </div>`}
+    </div>`).join('') || '<div class="empty"><p>لا يوجد طلاب</p></div>'}`;
 }
 
 async function showFullReport(reportId) {
