@@ -7400,7 +7400,7 @@ async function loadSupCompare() {
     circleStats.push({ circle, count, attRate, memoAvg, behAvg, totalVerses, total });
   }
   // الحلقة التي يقل عدد طلابها عن الحد الأدنى لا تدخل الترتيب (متوسطات عدد قليل جدًا من الطلاب تظلم الحلقات الكبيرة)
-  const MIN_RANK = 5;
+  const MIN_RANK = 8;
   const unranked = circleStats.filter(x => x.count < MIN_RANK);
   circleStats.sort((a,b)=> b.total - a.total || b.totalVerses - a.totalVerses);
   const rankedStats = circleStats.filter(x => x.count >= MIN_RANK);
@@ -7417,7 +7417,7 @@ async function loadSupCompare() {
   <div class="cp-head">
     <div>
       <div class="cp-title">🏆 لوحة المنافسة بين الحلقات</div>
-      <div class="cp-sub">الفترة: ${range.label} — الترتيب حسب مجموع (الحضور + الحفظ + السلوك) من 15 — للحلقات التي فيها 5 طلاب فأكثر</div>
+      <div class="cp-sub">الفترة: ${range.label} — الترتيب حسب مجموع (الحضور + الحفظ + السلوك) من 15 — للحلقات التي فيها 8 طلاب فأكثر</div>
     </div>
     <div class="cp-actions">
       <select id="cmp-period" onchange="loadSupCompare()">
