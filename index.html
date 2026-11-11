@@ -2335,6 +2335,7 @@ async function loadCircles() {
     <td>${c.location||'—'}</td>
     <td><span class="badge be">${cnt[c.id]||0} طالب</span></td>
     <td>
+      <button class="btn btn-o btn-sm" onclick="openMemoProgress('${c.id}')">📖 تقدّم الحفظ</button>
       <button class="btn btn-o btn-sm" onclick="editCircle('${c.id}','${esc(c.name)}','${c.teacher_id||''}','${esc(c.schedule||'')}','${esc(c.location||'')}','${c.co_teacher_id||''}','${c.is_official === false ? '0' : '1'}')">✏️</button>
       <button class="btn btn-r btn-sm" onclick="delCircle('${c.id}')">حذف</button>
     </td></tr>`).join('') : emptyRow(7,'لا توجد حلقات — تأكد من الاتصال بقاعدة البيانات');
@@ -7449,6 +7450,7 @@ async function loadSupCompare() {
           <span>🎓 ${cs.count} طالب</span>
           <span>📚 ${cs.totalVerses.toLocaleString()} آية</span>
         </div>
+        <div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="openMemoProgress('${cs.circle.id}')">📖 تقدّم الحفظ</button></div>
       </div>
       <div class="cp-total">${cs.total.toFixed(1)}<small>/15</small></div>
     </div>`).join('');
@@ -7467,6 +7469,7 @@ async function loadSupCompare() {
           <span>🎓 ${cs.count} طالب</span>
           <span>📚 ${cs.totalVerses.toLocaleString()} آية</span>
         </div>
+        <div style="margin-top:8px"><button class="btn btn-o btn-sm" onclick="openMemoProgress('${cs.circle.id}')">📖 تقدّم الحفظ</button></div>
       </div>
       <div class="cp-total" style="color:#8a8a8a">${cs.total.toFixed(1)}<small>/15</small></div>
     </div>`).join('');
