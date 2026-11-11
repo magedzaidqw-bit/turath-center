@@ -7399,8 +7399,12 @@ async function loadSupCompare() {
     const total = attRate/100*5 + memoAvg + behAvg;
     circleStats.push({ circle, count, attRate, memoAvg, behAvg, totalVerses, total });
   }
+  // الحلقة التي يقل عدد طلابها عن الحد الأدنى لا تدخل الترتيب (متوسطات عدد قليل جدًا من الطلاب تظلم الحلقات الكبيرة)
+  const MIN_RANK = 5;
+  const unranked = circleStats.filter(x => x.count < MIN_RANK);
   circleStats.sort((a,b)=> b.total - a.total || b.totalVerses - a.totalVerses);
-  _cmpData = { stats: circleStats, label: range.label };
+  const rankedStats = circleStats.filter(x => x.count >= MIN_RANK);
+  _cmpData = { stats: rankedStats, unranked, label: range.label };
 
   const totStudents = circleStats.reduce((s,x)=>s+x.count,0);
   const totVerses = circleStats.reduce((s,x)=>s+x.totalVerses,0);
@@ -7413,7 +7417,7 @@ async function loadSupCompare() {
   <div class="cp-head">
     <div>
       <div class="cp-title">🏆 لوحة المنافسة بين الحلقات</div>
-      <div class="cp-sub">الفترة: ${range.label} — الترتيب حسب مجموع (الحضور + الحفظ + السلوك) من 15</div>
+      <div class="cp-sub">الفترة: ${range.label} — الترتيب حسب مجموع (الحضور + الحفظ + السلوك) من 15 — للحلقات التي فيها 5 طلاب فأكثر</div>
     </div>
     <div class="cp-actions">
       <select id="cmp-period" onchange="loadSupCompare()">
@@ -7430,7 +7434,7 @@ async function loadSupCompare() {
     <div class="sc" style="border-color:#6b3fa0"><div class="si" style="background:#efe6fa">📚</div><div><div class="sn">${totVerses.toLocaleString()}</div><div class="sl">آية محفوظة</div></div></div>
   </div>`;
 
-  html += circleStats.map((cs,i)=>`
+  html += rankedStats.map((cs,i)=>`
     <div class="cp-row ${i<3?'cp-top cp-t'+(i+1):''}">
       <div class="cp-rk" style="background:${rkColor(i)}">${i+1}</div>
       <div class="cp-main">
@@ -7448,6 +7452,24 @@ async function loadSupCompare() {
       <div class="cp-total">${cs.total.toFixed(1)}<small>/15</small></div>
     </div>`).join('');
 
+  if (unranked.length) {
+    html += `<div class="cp-sub" style="margin:16px 4px 8px;font-weight:700;color:#8a6d1a">⚖️ خارج الترتيب لقلة عدد الطلاب (أقل من ${MIN_RANK} طلاب) — حتى لا تُقارن بالحلقات الكبيرة</div>` + unranked.map(cs=>`
+    <div class="cp-row" style="opacity:.85">
+      <div class="cp-rk" style="background:#b9b3a3">—</div>
+      <div class="cp-main">
+        <div class="cp-name">${escapeHtml(cs.circle.name)}</div>
+        <div class="cp-teacher">${cs.circle.teacher_name?'الشيخ '+escapeHtml(cs.circle.teacher_name):''}</div>
+        <div class="cp-chips">
+          <span>📅 حضور ${cs.attRate}%</span>
+          <span>📖 حفظ ${cs.memoAvg.toFixed(1)}/5</span>
+          <span>🌟 سلوك ${cs.behAvg.toFixed(1)}/5</span>
+          <span>🎓 ${cs.count} طالب</span>
+          <span>📚 ${cs.totalVerses.toLocaleString()} آية</span>
+        </div>
+      </div>
+      <div class="cp-total" style="color:#8a8a8a">${cs.total.toFixed(1)}<small>/15</small></div>
+    </div>`).join('');
+  }
   c.innerHTML = html;
 }
 
