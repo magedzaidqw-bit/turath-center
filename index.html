@@ -3032,11 +3032,13 @@ async function ensureParentAccount(phone, pass, name, studentName) {
   let uid = null;
   const { data: su, error: suErr } = await iso.auth.signUp({ email, password: pw });
   if (!suErr && su?.user && su.user.identities && su.user.identities.length) uid = su.user.id;
+  if (suErr && (suErr.status === 429 || /rate limit/i.test(suErr.message || ''))) return { error: 'تجاوز حد الطلبات المؤقت', rateLimited: true };
   if (suErr && /weak|easy to guess|known/i.test(suErr.message || '')) return { error: 'كلمة المرور الافتراضية (رقم الجوال) مرفوضة لأنها ضعيفة. اكتب كلمة مرور أخرى في خانة «كلمة مرور ولي الأمر» (مثل رقم الجوال مع حروف) ثم احفظ من جديد.' };
   if (!uid) {
     // الحساب موجود بلا ملف (حالة قديمة): نحاول الدخول به لإكمال الملف
     let { data: si, error: siErr } = await iso.auth.signInWithPassword({ email, password: pw });
     if ((siErr || !si?.user) && !pass) { const r2 = await iso.auth.signInWithPassword({ email, password: phone }); si = r2.data; siErr = r2.error; }
+    if (siErr && (siErr.status === 429 || /rate limit/i.test(siErr.message || ''))) return { error: 'تجاوز حد الطلبات المؤقت', rateLimited: true };
     if (siErr || !si?.user) return { error: 'يوجد حساب بهذا الرقم بكلمة مرور مختلفة. اطلب من المدير ربطه.' };
     uid = si.user.id;
   }
@@ -3061,7 +3063,7 @@ async function bulkCreateParentAccounts() {
   const phones = new Set(valid.map(s => s.phone));
   if (!valid.length && !bad.length) { alert('✅ كل الطلاب الذين لديهم رقم ولي أمر مرتبطون بحسابات.'); return; }
   if (!confirm(`سيتم إنشاء/ربط حسابات لـ ${valid.length} طالب (${phones.size} رقم مختلف).\nكلمة المرور الافتراضية: ${PARENT_PREFIX} + الرقم، ويستطيع ولي الأمر الدخول بالرقم فقط.\n` + (bad.length ? `\n⚠️ ${bad.length} طالب أرقامهم غير صالحة وسيظهرون في تقرير لتصحيحهم يدوياً.\n` : '') + '\nمتابعة؟')) return;
-  const cache = {}, okList = [], failList = [];
+  const cache = {}, okList = [], failList = []; let rateStop = false;
   if (btn) btn.disabled = true;
   let i = 0;
   for (const s of valid) {
@@ -3074,12 +3076,14 @@ async function bulkCreateParentAccounts() {
         const upd = { parent_id: r.id }; if (s.parent_phone !== s.phone) upd.parent_phone = s.phone;
         const { error: ue } = await sb.from('students').update(upd).eq('id', s.id);
         if (ue) failList.push({ s, why: ue.message }); else okList.push(s);
-      } else failList.push({ s, why: (r && r.error) || 'فشل غير معروف' });
+      } else if (r && r.rateLimited) { delete cache[s.phone]; rateStop = true; break; }
+      else failList.push({ s, why: (r && r.error) || 'فشل غير معروف' });
     } catch (e) { failList.push({ s, why: e.message || String(e) }); }
     await new Promise(r => setTimeout(r, 250));
   }
   if (btn) { btn.disabled = false; btn.textContent = '👨‍👦 إنشاء حسابات أولياء الأمور'; }
   let rep = `✅ تم ربط ${okList.length} طالب\n`;
+  if (rateStop) rep += `\n⏸️ توقفت العملية لأن النظام بلغ الحد المؤقت للطلبات. بقي عدد من الطلاب بلا حساب. انتظر 10 دقائق ثم اضغط الزر مرة أخرى، وسيكمل من حيث توقف.\n`;
   if (failList.length) rep += `\n❌ فشل ${failList.length}:\n` + failList.map(f => `• ${f.s.full_name} (${f.s.phone}) — ${f.why}`).join('\n') + '\n';
   if (bad.length) rep += `\n⚠️ أرقام غير صالحة (${bad.length}) — صحّحها من بطاقة الطالب:\n` + bad.map(s => `• ${s.full_name} — «${s.parent_phone}»`).join('\n');
   window._bulkReport = rep;
