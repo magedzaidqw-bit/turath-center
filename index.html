@@ -1410,6 +1410,7 @@ function buildPages() {
     <div class="stitle">🎓 إدارة الطلاب</div>
     <div style="margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center">
       <button class="btn btn-g" onclick="resetStudentForm()">+ إضافة طالب</button>
+      <button class="btn btn-o" id="btn-bulk-parents" style="display:none" onclick="bulkCreateParentAccounts()">👨‍👦 إنشاء حسابات أولياء الأمور</button>
       <select id="filter-circle" class="btn-o" onchange="loadStudents()"><option value="">جميع الحلقات</option></select>
       <input type="text" id="search-students" placeholder="🔍 ابحث باسم الطالب أو رقمه المدني أو المحفظ..." 
         oninput="filterStudentsLocal()" 
@@ -2797,6 +2798,7 @@ async function loadStudents() {
   showLoading('students-body');
   const cf = document.getElementById('filter-circle')?.value;
   // ملء فلتر الحلقات للمدير إذا كان فارغاً
+  const bpb = document.getElementById('btn-bulk-parents'); if (bpb) bpb.style.display = CP.role === 'admin' ? '' : 'none';
   if (CP.role === 'admin') {
     const filterSel = document.getElementById('filter-circle');
     if (filterSel && filterSel.options.length <= 1) {
@@ -3041,6 +3043,53 @@ async function ensureParentAccount(phone, pass, name, studentName) {
   const { error: pe } = await iso.from('profiles').insert({ id: uid, full_name: name || ('ولي أمر ' + studentName), role: 'parent', phone });
   if (pe && !/duplicate|already/i.test(pe.message || '')) return { error: 'تعذر إنشاء ملف ولي الأمر: ' + pe.message };
   return { id: uid };
+}
+
+// ===== إنشاء حسابات أولياء الأمور دفعة واحدة (للمدير) =====
+function normParentPhone(raw) {
+  let p = String(raw || '').replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660)).replace(/\D/g, '');
+  if (p.startsWith('00965')) p = p.slice(5); else if (p.startsWith('965') && p.length === 11) p = p.slice(3);
+  return p;
+}
+async function bulkCreateParentAccounts() {
+  if (CP.role !== 'admin') return;
+  const btn = document.getElementById('btn-bulk-parents');
+  const { data: studs, error } = await sb.from('students').select('id,full_name,parent_phone,parent_id').is('parent_id', null).not('parent_phone', 'is', null).neq('parent_phone', '');
+  if (error) { alert('تعذر جلب الطلاب: ' + error.message); return; }
+  const valid = [], bad = [];
+  studs.forEach(s => { const p = normParentPhone(s.parent_phone); (p.length === 8 ? valid : bad).push({ ...s, phone: p }); });
+  const phones = new Set(valid.map(s => s.phone));
+  if (!valid.length && !bad.length) { alert('✅ كل الطلاب الذين لديهم رقم ولي أمر مرتبطون بحسابات.'); return; }
+  if (!confirm(`سيتم إنشاء/ربط حسابات لـ ${valid.length} طالب (${phones.size} رقم مختلف).\nكلمة المرور الافتراضية: ${PARENT_PREFIX} + الرقم، ويستطيع ولي الأمر الدخول بالرقم فقط.\n` + (bad.length ? `\n⚠️ ${bad.length} طالب أرقامهم غير صالحة وسيظهرون في تقرير لتصحيحهم يدوياً.\n` : '') + '\nمتابعة؟')) return;
+  const cache = {}, okList = [], failList = [];
+  if (btn) btn.disabled = true;
+  let i = 0;
+  for (const s of valid) {
+    i++;
+    if (btn) btn.textContent = `⏳ ${i} / ${valid.length}`;
+    try {
+      if (!cache[s.phone]) cache[s.phone] = await ensureParentAccount(s.phone, '', '', s.full_name);
+      const r = cache[s.phone];
+      if (r && r.id) {
+        const upd = { parent_id: r.id }; if (s.parent_phone !== s.phone) upd.parent_phone = s.phone;
+        const { error: ue } = await sb.from('students').update(upd).eq('id', s.id);
+        if (ue) failList.push({ s, why: ue.message }); else okList.push(s);
+      } else failList.push({ s, why: (r && r.error) || 'فشل غير معروف' });
+    } catch (e) { failList.push({ s, why: e.message || String(e) }); }
+    await new Promise(r => setTimeout(r, 250));
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '👨‍👦 إنشاء حسابات أولياء الأمور'; }
+  let rep = `✅ تم ربط ${okList.length} طالب\n`;
+  if (failList.length) rep += `\n❌ فشل ${failList.length}:\n` + failList.map(f => `• ${f.s.full_name} (${f.s.phone}) — ${f.why}`).join('\n') + '\n';
+  if (bad.length) rep += `\n⚠️ أرقام غير صالحة (${bad.length}) — صحّحها من بطاقة الطالب:\n` + bad.map(s => `• ${s.full_name} — «${s.parent_phone}»`).join('\n');
+  window._bulkReport = rep;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;padding:16px;direction:rtl"><h3 style="margin:0 0 10px;font-family:Cairo,sans-serif">تقرير إنشاء الحسابات</h3><textarea readonly style="flex:1;min-height:260px;font-family:Cairo,sans-serif;font-size:13px;padding:8px;border:1px solid #ccc;border-radius:8px;direction:rtl"></textarea><div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-g" id="bulk-copy">📋 نسخ</button><button class="btn btn-o" id="bulk-close">إغلاق</button></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('textarea').value = rep;
+  ov.querySelector('#bulk-copy').onclick = () => { navigator.clipboard?.writeText(rep); };
+  ov.querySelector('#bulk-close').onclick = () => { ov.remove(); loadStudents(); };
 }
 
 async function saveStudent() {
