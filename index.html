@@ -722,6 +722,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
 const CIVIL_DOMAIN = 'test.com';
 const PHONE_DOMAIN = 'parent.test.com';
+const PARENT_PREFIX = 'Tr'; // كلمة مرور حسابات أولياء الأمور الجديدة = Tr + رقم الجوال
 const PARENT_DOMAIN = 'parent.turath.local';
 
 let CU = null, CP = null, authMode = 'admin';
@@ -761,7 +762,7 @@ async function doLogin() {
   const btn = document.getElementById('lbtn');
   btn.disabled = true; btn.textContent = 'جارٍ الدخول...';
 
-  let email, pass;
+  let email, pass, parentCandidates = null;
   if (authMode === 'admin') {
     email = document.getElementById('lemail').value.trim();
     pass = document.getElementById('lpass').value;
@@ -773,16 +774,25 @@ async function doLogin() {
     // إذا لم تُدخل كلمة مرور، استخدم الرقم المدني افتراضياً
     if (!pass) pass = civilId;
   } else {
-    const phone = document.getElementById('lphone').value.trim();
+    let phone = document.getElementById('lphone').value.trim().replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660)).replace(/\D/g,'');
+    if (phone.startsWith('00965')) phone = phone.slice(5); else if (phone.startsWith('965') && phone.length === 11) phone = phone.slice(3);
     pass = document.getElementById('lpass3').value;
     if (!phone) { showAlert('auth-alert','أدخل رقم الجوال','err'); btn.disabled=false; btn.textContent='دخول'; return; }
     email = phone + '@' + PHONE_DOMAIN;
+    // كلمة المرور اختيارية: الافتراضية هي الرقم، أو Tr + الرقم للحسابات الجديدة
+    parentCandidates = pass ? (pass === phone ? [phone, PARENT_PREFIX + phone] : [pass]) : [phone, PARENT_PREFIX + phone];
   }
 
   if (!email) { showAlert('auth-alert','أكمل جميع الحقول','err'); btn.disabled=false; btn.textContent='دخول'; return; }
 
   try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    let { data, error } = await sb.auth.signInWithPassword({ email, password: parentCandidates ? parentCandidates[0] : pass });
+    if (error && parentCandidates) {
+      for (const cand of parentCandidates.slice(1)) {
+        const r = await sb.auth.signInWithPassword({ email, password: cand });
+        if (!r.error) { data = r.data; error = null; break; }
+      }
+    }
     if (error) {
       const msgMap = { teacher:'الرقم المدني غير صحيح، أو تواصل مع المدير لتفعيل حسابك', parent:'رقم الجوال أو كلمة المرور غير صحيحة' };
       showAlert('auth-alert', msgMap[authMode] || ('خطأ: ' + error.message), 'err');
@@ -1697,7 +1707,7 @@ function buildModals() {
         <option value="أخرى">أخرى</option>
       </select>
     </div>
-    <div class="fg"><label>كلمة مرور ولي الأمر <span style="font-size:11px;color:var(--gold)">(اتركه فارغاً لاستخدام رقم الجوال تلقائياً)</span></label><input type="password" id="s-parent-pass" placeholder="اختياري — رقم الجوال افتراضياً"></div>
+    <div class="fg"><label>كلمة مرور ولي الأمر <span style="font-size:11px;color:var(--gold)">(اتركه فارغاً للاستخدام التلقائي)</span></label><input type="password" id="s-parent-pass" placeholder="اختياري — تلقائي"></div>
     <div style="background:#e3f3e8;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#1d6b3a">
       💡 أدخل رقم جوال ولي الأمر لإنشاء حسابه تلقائياً — سيدخل برقم جواله وكلمة المرور
     </div>
@@ -3016,14 +3026,15 @@ async function ensureParentAccount(phone, pass, name, studentName) {
   // 2) إنشاء الحساب بعميل معزول (لا يمس جلسة المستخدم الحالي)
   const iso = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'iso-parent-' + Date.now() } });
   const email = phone + '@' + PHONE_DOMAIN;
-  const pw = pass || phone;
+  const pw = pass || (PARENT_PREFIX + phone);
   let uid = null;
   const { data: su, error: suErr } = await iso.auth.signUp({ email, password: pw });
   if (!suErr && su?.user && su.user.identities && su.user.identities.length) uid = su.user.id;
   if (suErr && /weak|easy to guess|known/i.test(suErr.message || '')) return { error: 'كلمة المرور الافتراضية (رقم الجوال) مرفوضة لأنها ضعيفة. اكتب كلمة مرور أخرى في خانة «كلمة مرور ولي الأمر» (مثل رقم الجوال مع حروف) ثم احفظ من جديد.' };
   if (!uid) {
     // الحساب موجود بلا ملف (حالة قديمة): نحاول الدخول به لإكمال الملف
-    const { data: si, error: siErr } = await iso.auth.signInWithPassword({ email, password: pw });
+    let { data: si, error: siErr } = await iso.auth.signInWithPassword({ email, password: pw });
+    if ((siErr || !si?.user) && !pass) { const r2 = await iso.auth.signInWithPassword({ email, password: phone }); si = r2.data; siErr = r2.error; }
     if (siErr || !si?.user) return { error: 'يوجد حساب بهذا الرقم بكلمة مرور مختلفة. اطلب من المدير ربطه.' };
     uid = si.user.id;
   }
