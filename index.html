@@ -2216,10 +2216,11 @@ async function populateSel(selId, type) {
     sel.innerHTML = (isFilter ? '<option value="">الكل</option>' : '<option value="">اختر الحلقة</option>') + (data?.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'');
   } else if (type === 'teachers') {
     const data = await cachedFetch('teachers_list', async () => {
-      const { data } = await sb.from('profiles').select('id,full_name').eq('role','teacher').order('full_name');
+      const { data } = await sb.from('profiles').select('id,full_name,activity_excluded').eq('role','teacher').order('full_name');
       return data;
     }, 120000);
-    sel.innerHTML = '<option value="">اختر المحفظ</option>' + (data?.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('')||'');
+    const tList = selId === 'ev-teacher' ? (data||[]).filter(t=>!t.activity_excluded) : (data||[]); // الحسابات المستبعدة (التجريبية) لا تدخل في التقييم
+    sel.innerHTML = '<option value="">اختر المحفظ</option>' + tList.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('');
   } else if (type === 'students-full') {
     const { data } = await sb.from('students').select('id,full_name,circles(name,teacher_name)').order('full_name');
     sel.innerHTML = '<option value="">اختر الطالب</option>' + (data?.map(s=>`<option value="${s.id}">${s.full_name} — ${s.circles?.name||'—'}</option>`).join('')||'');
